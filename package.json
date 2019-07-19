@@ -4,15 +4,19 @@
   "description": "Check if a JSON schema is a subset of another",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "prepare": "tsc",
+    "test": "jest"
   },
   "author": "Petter Häggholm <petter@petterhaggholm.net>",
   "license": "ISC",
   "devDependencies": {
+    "@types/jest": "^24.0.15",
     "@types/typescript": "^2.0.0",
+    "jest": "^24.8.0",
     "typescript": "^3.5.3"
   },
   "dependencies": {
+    "@types/node": "^10.14.13",
     "fast-deep-equal": "^2.0.1",
     "json-schema-ref-parser": "^7.1.0"
   }
