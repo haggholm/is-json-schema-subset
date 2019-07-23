@@ -10,9 +10,12 @@
   "author": "Petter Häggholm <petter@petterhaggholm.net>",
   "license": "ISC",
   "devDependencies": {
+    "@types/ajv": "^1.0.0",
     "@types/jest": "^24.0.15",
     "@types/typescript": "^2.0.0",
+    "ajv": "^6.10.2",
     "jest": "^24.8.0",
+    "json-schema-faker": "^0.5.0-rc17",
     "ts-jest": "^24.0.2",
     "typescript": "^3.5.3"
   },

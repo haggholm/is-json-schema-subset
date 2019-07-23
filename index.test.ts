@@ -1,11 +1,21 @@
 /* tslint:disable:no-console */
 
 import { JSONSchema } from "json-schema-ref-parser";
+import jsf = require("json-schema-faker");
+import AJV = require("ajv");
+
 import satisfies from "./index";
+
+console.log({ jsf });
+
+const RANDOM_SAMPLES = 100;
+
+const ajv = new AJV({ allErrors: true });
+jsf.option("optionalsProbability", 0.5);
 
 expect.extend({
   toSatisfy: async (subset: JSONSchema, superset: JSONSchema) => {
-    const [subInconsistent, supInconsistent, match] = await Promise.all([
+    const [subInconsistent, supInconsistent, pass] = await Promise.all([
       satisfies(subset, subset),
       satisfies(superset, superset),
       satisfies(subset, superset)
@@ -17,26 +27,41 @@ expect.extend({
       throw new Error("Superset does not match itself!");
     }
 
-    if (match) {
-      return {
-        pass: true,
-        message: () =>
-          `Expected ${JSON.stringify(subset)} to satisfy ${JSON.stringify(
-            superset
-          )}`
-      };
-    } else {
-      return {
-        pass: false,
-        message: () =>
-          `Expected ${JSON.stringify(subset)} to satisfy ${JSON.stringify(
-            superset
-          )}`
-      };
+    if (pass) {
+      const superValidator = ajv.compile(superset);
+      for (let i = 0; i < RANDOM_SAMPLES; i++) {
+        let instance;
+        try {
+          instance = jsf.generate(subset, []);
+        } catch (err) {
+          // Ignore: jsf does not support all draft-7 features.
+        }
+
+        console.log("test random instance", JSON.stringify(instance));
+        if (!superValidator(instance)) {
+          return {
+            pass,
+            message: () =>
+              `!!!ERROR!!! Subset ${JSON.stringify(
+                subset
+              )} was found to satisfy ${JSON.stringify(
+                superset
+              )}, but failed on random data: ${JSON.stringify(instance)}`
+          };
+        }
+      }
     }
+
+    return {
+      pass,
+      message: () =>
+        `Expected ${JSON.stringify(subset)} to satisfy ${JSON.stringify(
+          superset
+        )}`
+    };
   },
   toViolate: async (subset: JSONSchema, superset: JSONSchema) => {
-    const [subInconsistent, supInconsistent, match] = await Promise.all([
+    const [subInconsistent, supInconsistent, pass] = await Promise.all([
       satisfies(subset, subset),
       satisfies(superset, superset),
       satisfies(subset, superset)
@@ -48,23 +73,13 @@ expect.extend({
       throw new Error("Superset does not match itself!");
     }
 
-    if (match) {
-      return {
-        pass: false,
-        message: () =>
-          `Expected ${JSON.stringify(subset)} not to satisfy ${JSON.stringify(
-            superset
-          )}`
-      };
-    } else {
-      return {
-        pass: true,
-        message: () =>
-          `Expected ${JSON.stringify(subset)} not to satisfy ${JSON.stringify(
-            superset
-          )}`
-      };
-    }
+    return {
+      pass: !pass,
+      message: () =>
+        `Expected ${JSON.stringify(subset)} not to satisfy ${JSON.stringify(
+          superset
+        )}`
+    };
   }
 });
 
