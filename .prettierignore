@@ -1,0 +1,8 @@
+package.json
+package-lock.json
+**/vendor/**
+README.md
+CHANGELOG.md
+dist/**
+build/**
+flow-typed/**

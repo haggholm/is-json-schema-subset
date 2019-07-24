@@ -2,9 +2,11 @@
   "name": "is-json-schema-subset",
   "version": "1.0.0",
   "description": "Check if a JSON schema is a subset of another",
-  "main": "index.js",
+  "main": "dist/is-json-schema-subset.js",
+  "types": "dist/is-json-schema-subset.d.ts",
   "scripts": {
-    "prepare": "tsc",
+    "prepare": "rimraf dist && tsc",
+    "preversion": "yarn test",
     "test": "jest"
   },
   "author": "Petter Häggholm <petter@petterhaggholm.net>",
@@ -16,6 +18,7 @@
     "ajv": "^6.10.2",
     "jest": "^24.8.0",
     "json-schema-faker": "^0.5.0-rc17",
+    "rimraf": "^2.6.3",
     "ts-jest": "^24.0.2",
     "typescript": "^3.5.3"
   },
