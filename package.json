@@ -23,7 +23,7 @@
     "clean": "rimraf dist",
     "coverage": "jest --coverage --coverageReporters=text-lcov | coveralls",
     "compile": "tsc",
-    "compress": "terser --mangle --define process.env.DEBUG=0 --ecma 7 --module --source-map --toplevel dist/is-json-schema-subset.js -o dist/is-json-schema-subset.min.js",
+    "compress": "terser dist/is-json-schema-subset.js --define process.env.DEBUG=0 --config-file .terserrc -o dist/is-json-schema-subset.min.js",
     "lint": "tslint --project .",
     "lint-fix": "run-p -l tslint-fix sort-package-json",
     "prepare": "run-s -n clean compile compress",

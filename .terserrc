@@ -1,0 +1,10 @@
+{
+  "ecma": 7,
+  "mangle": true,
+  "module": true,
+  "compress": {
+    "drop_console": true,
+    "pure_funcs": ["log"]
+  },
+  "toplevel": true
+}

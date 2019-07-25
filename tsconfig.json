@@ -1,16 +1,16 @@
 {
-  "compilerOptions": {
-    "alwaysStrict": true,
-    "declaration": true,
-    "declarationDir": "dist",
-    "downlevelIteration": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "node",
-    "outDir": "dist",
-    "rootDir": "src",
-    "sourceMap": true,
-    "target": "es2018"
-  },
-  "exclude": ["dist/**  ", "test/**"]
+	"compilerOptions": {
+		"alwaysStrict": true,
+		"declaration": true,
+		"declarationDir": "dist",
+		"downlevelIteration": true,
+		"esModuleInterop": true,
+		"inlineSourceMap": true,
+		"module": "esnext",
+		"moduleResolution": "node",
+		"outDir": "dist",
+		"rootDir": "src",
+		"target": "es2018"
+	},
+	"exclude": ["dist/**  ", "test/**"]
 }
