@@ -1,6 +1,6 @@
 {
   "name": "is-json-schema-subset",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Check if a JSON schema is a subset of another",
   "main": "is-json-schema-subset/dist/is-json-schema-subset.min.js",
   "types": "dist/is-json-schema-subset.d.ts",
@@ -10,7 +10,9 @@
     "preversion": "yarn test",
     "test": "jest"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "author": "Petter Häggholm <petter@petterhaggholm.net>",
   "license": "ISC",
   "devDependencies": {
