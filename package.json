@@ -21,6 +21,7 @@
   "types": "dist/is-json-schema-subset.d.ts",
   "scripts": {
     "clean": "rimraf dist",
+    "coverage": "jest --coverage --coverageReporters=text-lcov | coveralls",
     "compile": "tsc",
     "compress": "terser --mangle --define process.env.DEBUG=0 --ecma 7 --module --source-map --toplevel dist/is-json-schema-subset.js -o dist/is-json-schema-subset.min.js",
     "lint": "tslint --project .",
@@ -40,6 +41,7 @@
   "devDependencies": {
     "@types/jest": "^24.0.15",
     "ajv": "^6.10.2",
+    "coveralls": "^3.0.5",
     "jest": "^24.8.0",
     "json-schema-faker": "^0.5.0-rc17",
     "npm-run-all": "^4.1.5",

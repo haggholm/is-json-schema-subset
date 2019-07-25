@@ -3,8 +3,51 @@
 
 # is-json-schema-subset
 
-Check if one JSON schema is a subset of another.
+> Check if a JSON schema is a subset of another
 
-For example, given a schema defining the *output* of some process A, and
-a second schema defining the *input* of some process B, will the output from A
-be *valid* input for process B?
+Given a schema defining the _output_ of some process A, and
+a second schema defining the _input_ of some process B, will the output from A
+be _valid_ input for process B?
+
+Uses [ajv](https://github.com/epoberezkin/ajv) and
+[json-schema-merge-allof](https://github.com/mokkabonna/json-schema-merge-allof).
+
+## Usage
+
+```js
+import isJsonSchemaSubset from 'is-json-schema-subset';
+
+import inputSchema from './input-schema.json';
+import outputSchema from './input-schema.json';
+
+async function check() {
+	if (await isJsonSchemaSubset(inputSchema, outputSchema)) {
+		console.log('OK');
+	} else {
+		console.log('Fail');
+	}
+}
+```
+
+## API
+
+```js
+import isJsonSchemaSubset from 'is-json-schema-subset';
+```
+
+## isJsonSchemaSubset(subset: JSONSchema, superset: JSONSchema[, allowPartial: boolean = false])
+
+Returns a promise resolving to `true` if `subset` is a compatible subset of `superset`,
+else `false`.
+
+If `allowPartial` is `false`, `subset` must provide _all_ required properties for `superset`.
+
+## Install
+
+```
+$ yarn add is-json-schema-subset
+```
+
+## License
+
+MIT
