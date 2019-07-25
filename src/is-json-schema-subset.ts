@@ -298,14 +298,17 @@ function numRulesMatch(
 			return false;
 		}
 
-		if (subset.hasOwnProperty('maximum') && subset.maximum > superset.maximum) {
+		if (
+			subset.hasOwnProperty('maximum') &&
+			(subset.maximum as number) > (superset.maximum as number)
+		) {
 			// tslint:disable-next-line:no-unused-expression
 			log('Subset permits greater maximum');
 			return false;
 		}
 		if (
 			subset.hasOwnProperty('exclusiveMaximum') &&
-			subset.exclusiveMaximum > superset.maximum
+			(subset.exclusiveMaximum as number) > (superset.maximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
 			log('Subset permits greater maximum (exclusive)');
@@ -333,7 +336,8 @@ function numRulesMatch(
 		}
 		if (
 			subset.hasOwnProperty('exclusiveMaximum') &&
-			subset.exclusiveMaximum > superset.exclusiveMaximum
+			(subset.exclusiveMaximum as number) >
+				(superset.exclusiveMaximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
 			log('Subset permits greater exclusiveMaximum');
@@ -378,7 +382,7 @@ function numRulesMatch(
 
 		if (
 			subset.hasOwnProperty('minimum') &&
-			subset.minimum <= superset.exclusiveMinimum
+			(subset.minimum as number) <= (superset.exclusiveMinimum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
 			log('Subset permits smaller minimum');
@@ -386,7 +390,8 @@ function numRulesMatch(
 		}
 		if (
 			subset.hasOwnProperty('exclusiveMinimum') &&
-			subset.exclusiveMinimum < superset.exclusiveMinimum
+			(subset.exclusiveMinimum as number) <
+				(superset.exclusiveMinimum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
 			log('Subset permits greater exclusiveMinimum');
@@ -447,7 +452,9 @@ function anyOfMatches(
 ): boolean {
 	if (
 		subset.anyOf &&
-		!all(subset.anyOf, (e) => satisfies(e, superset, allowPartial))
+		!all(subset.anyOf as JSONSchema[], (e) =>
+			satisfies(e, superset, allowPartial)
+		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 
@@ -457,7 +464,9 @@ function anyOfMatches(
 
 	if (
 		superset.anyOf &&
-		!some(superset.anyOf, (e) => satisfies(subset, e, allowPartial))
+		!some(superset.anyOf as JSONSchema[], (e) =>
+			satisfies(subset, e, allowPartial)
+		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 		log('Subset does not satisfy any of superset.anyOf');
@@ -474,7 +483,9 @@ function oneOfMatches(
 ): boolean {
 	if (
 		subset.oneOf &&
-		!all(subset.oneOf, (e) => satisfies(e, superset, allowPartial))
+		!all(subset.oneOf as JSONSchema[], (e) =>
+			satisfies(e, superset, allowPartial)
+		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 
@@ -484,7 +495,9 @@ function oneOfMatches(
 
 	if (
 		superset.oneOf &&
-		!one(superset.anyOf, (e) => satisfies(subset, e, allowPartial))
+		!one(superset.anyOf as JSONSchema[], (e) =>
+			satisfies(subset, e, allowPartial)
+		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 
@@ -500,13 +513,19 @@ function notMatches(
 	superset: JSONSchema,
 	allowPartial: boolean
 ): boolean {
-	if (subset.not && satisfies(subset.not, superset, allowPartial)) {
+	if (
+		subset.not &&
+		satisfies(subset.not as JSONSchema, superset, allowPartial)
+	) {
 		// tslint:disable-next-line:no-unused-expression
 		log('Subset.not should not satisfy superset');
 		return false;
 	}
 
-	if (superset.not && satisfies(subset, superset.not, allowPartial)) {
+	if (
+		superset.not &&
+		satisfies(subset, superset.not as JSONSchema, allowPartial)
+	) {
 		// tslint:disable-next-line:no-unused-expression
 		log('Subset should not satisfy superset.not');
 		return false;
