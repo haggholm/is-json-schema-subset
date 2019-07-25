@@ -10,6 +10,7 @@
     "preversion": "yarn test",
     "test": "jest"
   },
+  "files": ["dist"],
   "author": "Petter Häggholm <petter@petterhaggholm.net>",
   "license": "ISC",
   "devDependencies": {
