@@ -2,10 +2,11 @@
   "name": "is-json-schema-subset",
   "version": "1.0.0",
   "description": "Check if a JSON schema is a subset of another",
-  "main": "dist/is-json-schema-subset.js",
+  "main": "is-json-schema-subset/dist/is-json-schema-subset.min.js",
   "types": "dist/is-json-schema-subset.d.ts",
   "scripts": {
-    "prepare": "rimraf dist && tsc",
+    "compress": "terser --mangle --define process.env.DEBUG=0 --ecma 7 --module --source-map --toplevel dist/is-json-schema-subset.js -o dist/is-json-schema-subset.min.js",
+    "prepare": "rimraf dist && tsc && yarn compress",
     "preversion": "yarn test",
     "test": "jest"
   },
@@ -19,6 +20,7 @@
     "jest": "^24.8.0",
     "json-schema-faker": "^0.5.0-rc17",
     "rimraf": "^2.6.3",
+    "terser": "^4.1.2",
     "ts-jest": "^24.0.2",
     "typescript": "^3.5.3"
   },
