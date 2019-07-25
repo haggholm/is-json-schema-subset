@@ -1,5 +1,7 @@
 # is-json-schema-subset
 
+[![Build Status](https://travis-ci.com/haggholm/is-json-schema-subset.svg?branch=master)](https://travis-ci.com/haggholm/is-json-schema-subset)
+
 Check if one JSON schema is a subset of another.
 
 For example, given a schema defining the *output* of some process A, and
