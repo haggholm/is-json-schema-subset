@@ -1,6 +1,6 @@
 # is-json-schema-subset
 
-[![Build Status](https://travis-ci.com/haggholm/is-json-schema-subset.svg?branch=master)](https://travis-ci.com/haggholm/is-json-schema-subset)
+[![Build Status](https://travis-ci.com/haggholm/is-json-schema-subset.svg?branch=master)](https://travis-ci.com/haggholm/is-json-schema-subset) [![Greenkeeper badge](https://badges.greenkeeper.io/haggholm/is-json-schema-subset.svg)](https://greenkeeper.io/)
 
 Check if one JSON schema is a subset of another.
 
