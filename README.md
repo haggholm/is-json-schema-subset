@@ -1,5 +1,6 @@
 [![Build Status](https://travis-ci.com/haggholm/is-json-schema-subset.svg?branch=master)](https://travis-ci.com/haggholm/is-json-schema-subset)
 [![Greenkeeper badge](https://badges.greenkeeper.io/greenkeeperio/badges.svg)](https://greenkeeper.io/)
+[![Coverage Status](https://coveralls.io/repos/github/haggholm/is-json-schema-subset/badge.svg?branch=master)](https://coveralls.io/github/haggholm/is-json-schema-subset?branch=master)
 
 # is-json-schema-subset
 
