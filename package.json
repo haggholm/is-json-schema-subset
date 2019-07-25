@@ -2,30 +2,34 @@
   "name": "is-json-schema-subset",
   "version": "1.0.2",
   "description": "Check if a JSON schema is a subset of another",
-  "main": "is-json-schema-subset/dist/is-json-schema-subset.min.js",
-  "types": "dist/is-json-schema-subset.d.ts",
-  "scripts": {
-    "compress": "terser --mangle --define process.env.DEBUG=0 --ecma 7 --module --source-map --toplevel dist/is-json-schema-subset.js -o dist/is-json-schema-subset.min.js",
-    "prepare": "rimraf dist && tsc && yarn compress",
-    "preversion": "yarn test",
-    "test": "jest"
+  "keywords": [
+    "JSON schema",
+    "validation"
+  ],
+  "homepage": "https://github.com/haggholm/is-json-schema-subset",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:haggholm/is-json-schema-subset.git"
   },
+  "license": "MIT",
+  "author": "Petter Häggholm <petter@petterhaggholm.net>",
   "files": [
     "dist"
   ],
-  "author": "Petter Häggholm <petter@petterhaggholm.net>",
-  "license": "ISC",
-  "devDependencies": {
-    "@types/ajv": "^1.0.0",
-    "@types/jest": "^24.0.15",
-    "@types/typescript": "^2.0.0",
-    "ajv": "^6.10.2",
-    "jest": "^24.8.0",
-    "json-schema-faker": "^0.5.0-rc17",
-    "rimraf": "^2.6.3",
-    "terser": "^4.1.2",
-    "ts-jest": "^24.0.2",
-    "typescript": "^3.5.3"
+  "sideEffects": false,
+  "main": "is-json-schema-subset/dist/is-json-schema-subset.min.js",
+  "types": "dist/is-json-schema-subset.d.ts",
+  "scripts": {
+    "clean": "rimraf dist",
+    "compile": "tsc",
+    "compress": "terser --mangle --define process.env.DEBUG=0 --ecma 7 --module --source-map --toplevel dist/is-json-schema-subset.js -o dist/is-json-schema-subset.min.js",
+    "lint": "tslint --project .",
+    "lint-fix": "run-p -l tslint-fix sort-package-json",
+    "prepare": "run-s -n clean compile compress",
+    "sort-package-json": "sort-package-json",
+    "test": "jest",
+    "tslint-fix": "tslint --fix --project .",
+    "preversion": "run-p -l lint test"
   },
   "dependencies": {
     "@types/node": "^10.14.13",
@@ -33,5 +37,27 @@
     "json-schema-merge-allof": "^0.6.0",
     "json-schema-ref-parser": "^7.1.0"
   },
-  "sideEffects": false
+  "devDependencies": {
+    "@types/jest": "^24.0.15",
+    "ajv": "^6.10.2",
+    "jest": "^24.8.0",
+    "json-schema-faker": "^0.5.0-rc17",
+    "npm-run-all": "^4.1.5",
+    "rimraf": "^2.6.3",
+    "sort-package-json": "^1.22.1",
+    "terser": "^4.1.2",
+    "ts-jest": "^24.0.2",
+    "tslint": "^5.18.0",
+    "tslint-config-prettier": "^1.18.0",
+    "tslint-consistent-codestyle": "^1.15.1",
+    "tslint-plugin-prettier": "^2.0.1",
+    "typescript": "^3.5.3"
+  },
+  "engines": {
+    "node": ">=10.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.com"
+  }
 }

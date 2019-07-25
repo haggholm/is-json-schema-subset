@@ -64,6 +64,7 @@ function typeMatches(
 		(superset.type === 'number' && subset.type === 'integer');
 
 	if (!match) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG &&
 			log(`Type mismatch: ${subset.type} does not satisfy ${superset.type}`);
 	}
@@ -78,6 +79,7 @@ function subsetHasRequiredProps(
 	const subsetRequires = new Set(subset.required || []);
 	for (const prop of superset.required || []) {
 		if (!subsetRequires.has(prop)) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG &&
 				log('Subset does not require necessary property', prop);
 			return false;
@@ -96,6 +98,7 @@ function subsetHasNoExtraneousProps(
 		const superProps = new Set(Object.keys(superset));
 		for (const prop of Object.keys(subset.properties || {})) {
 			if (!superProps.has(prop)) {
+				// tslint:disable-next-line:no-unused-expression
 				process.env.DEBUG && log('Subset has extraneous property', prop);
 				return false;
 			}
@@ -123,6 +126,7 @@ function subsetPropertiesMatch(
 		}
 
 		if (!satisfies(subProps[prop], superProps[prop], allowPartial)) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Property', prop, 'does not match');
 			return false;
 		}
@@ -141,6 +145,7 @@ function stringRulesMatch(
 	}
 
 	if (superset.format && superset.format !== subset.format) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG && log('String format mismatch');
 		return false;
 	}
@@ -151,6 +156,7 @@ function stringRulesMatch(
 	}
 
 	if (superset.pattern && superset.pattern !== subset.pattern) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG && log('String pattern mismatch');
 		return false;
 	}
@@ -168,18 +174,21 @@ function stringRulesMatch(
 		(!subset.hasOwnProperty('maxLength') ||
 			subset.maxLength > superset.maxLength)
 	) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG && log('Subset maxLength is less than superset');
 		return false;
 	}
 
 	if (superset.hasOwnProperty('enum')) {
 		if (!subset.hasOwnProperty('enum')) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset is missing enum');
 			return false;
 		}
 		const enums = new Set(superset.enum);
 		for (const e of subset.enum) {
 			if (!enums.has(e)) {
+				// tslint:disable-next-line:no-unused-expression
 				process.env.DEBUG && log('Subset is missing enum:', e);
 				return false;
 			}
@@ -202,6 +211,7 @@ function arrayRulesMatch(
 		superset.hasOwnProperty('minItems') &&
 		(!subset.hasOwnProperty('minItems') || subset.minItems < superset.minItems)
 	) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG && log('Subset minItems is less than superset');
 		return false;
 	}
@@ -209,6 +219,7 @@ function arrayRulesMatch(
 		superset.hasOwnProperty('maxItems') &&
 		(!subset.hasOwnProperty('maxItems') || subset.maxItems > superset.maxItems)
 	) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG && log('Subset maxItems is more than superset');
 		return false;
 	}
@@ -223,6 +234,7 @@ function arrayRulesMatch(
 			!Array.isArray(subset.items) ||
 			superset.items.length !== subset.items.length
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Tuple item count mismatch');
 			return false;
 		}
@@ -234,6 +246,7 @@ function arrayRulesMatch(
 					allowPartial
 				)
 			) {
+				// tslint:disable-next-line:no-unused-expression
 				process.env.DEBUG && log('Tuple items mismatch (see previous error)');
 				return false;
 			}
@@ -246,12 +259,14 @@ function arrayRulesMatch(
 				allowPartial
 			)
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Array items mismatch (see previous error)');
 			return false;
 		}
 	}
 
 	if (superset.uniqueItems && !subset.uniqueItems) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG && log('Subset does not require uniqueItems');
 		return false;
 	}
@@ -273,11 +288,13 @@ function numRulesMatch(
 			!subset.hasOwnProperty('maximum') &&
 			!subset.hasOwnProperty('exclusiveMaximum')
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset has no maximum property');
 			return false;
 		}
 
 		if (subset.hasOwnProperty('maximum') && subset.maximum > superset.maximum) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset permits greater maximum');
 			return false;
 		}
@@ -285,6 +302,7 @@ function numRulesMatch(
 			subset.hasOwnProperty('exclusiveMaximum') &&
 			subset.exclusiveMaximum > superset.maximum
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset permits greater maximum (exclusive)');
 			return false;
 		}
@@ -295,6 +313,7 @@ function numRulesMatch(
 			!subset.hasOwnProperty('maximum') &&
 			!subset.hasOwnProperty('exclusiveMaximum')
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset has no maximum property');
 			return false;
 		}
@@ -303,6 +322,7 @@ function numRulesMatch(
 			subset.hasOwnProperty('maximum') &&
 			subset.maximum >= superset.exclusiveMaximum
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset permits greater maximum');
 			return false;
 		}
@@ -310,6 +330,7 @@ function numRulesMatch(
 			subset.hasOwnProperty('exclusiveMaximum') &&
 			subset.exclusiveMaximum > superset.exclusiveMaximum
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset permits greater exclusiveMaximum');
 			return false;
 		}
@@ -320,11 +341,13 @@ function numRulesMatch(
 			!subset.hasOwnProperty('minimum') &&
 			!subset.hasOwnProperty('exclusiveMinimum')
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset has no minimum property');
 			return false;
 		}
 
 		if (subset.hasOwnProperty('minimum') && subset.minimum < superset.minimum) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset permits greater minimum');
 			return false;
 		}
@@ -332,6 +355,7 @@ function numRulesMatch(
 			subset.hasOwnProperty('exclusiveMinimum') &&
 			subset.exclusiveMinimum < superset.minimum
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset permits greater minimum');
 			return false;
 		}
@@ -342,6 +366,7 @@ function numRulesMatch(
 			!subset.hasOwnProperty('minimum') &&
 			!subset.hasOwnProperty('exclusiveMinimum')
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset has no minimum property');
 			return false;
 		}
@@ -350,6 +375,7 @@ function numRulesMatch(
 			subset.hasOwnProperty('minimum') &&
 			subset.minimum <= superset.exclusiveMinimum
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset permits smaller minimum');
 			return false;
 		}
@@ -357,6 +383,7 @@ function numRulesMatch(
 			subset.hasOwnProperty('exclusiveMinimum') &&
 			subset.exclusiveMinimum < superset.exclusiveMinimum
 		) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset permits greater exclusiveMinimum');
 			return false;
 		}
@@ -364,10 +391,12 @@ function numRulesMatch(
 
 	if (superset.multipleOf) {
 		if (!subset.multipleOf) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Subset lacks multipleOf');
 			return false;
 		}
 		if (subset.multipleOf % superset.multipleOf !== 0) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG &&
 				log(
 					'Subset multipleOf is not an integer multiple of superset multipleOf'
@@ -385,6 +414,7 @@ function constMatch(
 	allowPartial: boolean
 ): boolean {
 	if (superset.const && superset.const !== subset.const) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG &&
 			log(`Subset const mismatch (${superset.const} !== ${subset.const})`);
 		return false;
@@ -414,6 +444,7 @@ function anyOfMatches(
 		subset.anyOf &&
 		!all(subset.anyOf, (e) => satisfies(e, superset, allowPartial))
 	) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG &&
 			log('Some subset.anyOf elements do not satisfy superset');
 		return false;
@@ -423,6 +454,7 @@ function anyOfMatches(
 		superset.anyOf &&
 		!some(superset.anyOf, (e) => satisfies(subset, e, allowPartial))
 	) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG && log('Subset does not satisfy any of superset.anyOf');
 		return false;
 	}
@@ -439,6 +471,7 @@ function oneOfMatches(
 		subset.oneOf &&
 		!all(subset.oneOf, (e) => satisfies(e, superset, allowPartial))
 	) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG &&
 			log('Some subset.oneOf elements do not satisfy superset');
 		return false;
@@ -448,6 +481,7 @@ function oneOfMatches(
 		superset.oneOf &&
 		!one(superset.anyOf, (e) => satisfies(subset, e, allowPartial))
 	) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG &&
 			log('Subset does not satisfy exactly one of superset.oneOf');
 		return false;
@@ -462,11 +496,13 @@ function notMatches(
 	allowPartial: boolean
 ): boolean {
 	if (subset.not && satisfies(subset.not, superset, allowPartial)) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG && log('Subset.not should not satisfy superset');
 		return false;
 	}
 
 	if (superset.not && satisfies(subset, superset.not, allowPartial)) {
+		// tslint:disable-next-line:no-unused-expression
 		process.env.DEBUG && log('Subset should not satisfy superset.not');
 		return false;
 	}
@@ -506,6 +542,7 @@ function satisfies(
 		notMatches,
 	]) {
 		if (!validator(subset, superset, allowPartial)) {
+			// tslint:disable-next-line:no-unused-expression
 			process.env.DEBUG && log('Validator failed:', validator.name);
 			return false;
 		}
