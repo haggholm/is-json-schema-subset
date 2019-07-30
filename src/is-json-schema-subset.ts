@@ -30,15 +30,15 @@ function some<T>(elements: T[], condition: (val: T) => boolean): boolean {
 	return false;
 }
 
-function multiple<T>(elements: T[], condition: (val: T) => boolean): boolean {
-	let matches = 0;
-	for (const el of elements) {
-		if (condition(el) && ++matches >= 2) {
-			return true;
-		}
-	}
-	return false;
-}
+// function multiple<T>(elements: T[], condition: (val: T) => boolean): boolean {
+// 	let matches = 0;
+// 	for (const el of elements) {
+// 		if (condition(el) && ++matches >= 2) {
+// 			return true;
+// 		}
+// 	}
+// 	return false;
+// }
 
 function one<T>(elements: T[], condition: (val: T) => boolean): boolean {
 	let matches = 0;
@@ -50,14 +50,14 @@ function one<T>(elements: T[], condition: (val: T) => boolean): boolean {
 	return matches === 1;
 }
 
-function none<T>(elements: T[], condition: (val: T) => boolean): boolean {
-	for (const el of elements) {
-		if (condition(el)) {
-			return false;
-		}
-	}
-	return true;
-}
+// function none<T>(elements: T[], condition: (val: T) => boolean): boolean {
+// 	for (const el of elements) {
+// 		if (condition(el)) {
+// 			return false;
+// 		}
+// 	}
+// 	return true;
+// }
 
 function typeMatches(
 	subset: JSONSchema,
@@ -540,6 +540,8 @@ function satisfies(
 	allowPartial: boolean
 ): boolean {
 	if (isEqual(subset, superset)) {
+		return true;
+	} else if (isEqual(superset, {})) {
 		return true;
 	}
 
