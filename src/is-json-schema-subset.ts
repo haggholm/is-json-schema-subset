@@ -126,7 +126,7 @@ function subsetPropertiesMatch(
 	};
 
 	for (const prop of Object.keys(superProps)) {
-		if (!subProps || !Object.prototype.hasOwnProperty.call(subProps, 'prop')) {
+		if (!subProps || !Object.prototype.hasOwnProperty.call(subProps, prop)) {
 			continue;
 		}
 
@@ -150,14 +150,35 @@ function stringRulesMatch(
 	}
 
 	if (superset.format && superset.format !== subset.format) {
-		// tslint:disable-next-line:no-unused-expression
-		log('String format mismatch');
-		return false;
-	}
-
-	if (superset.format && superset.format !== subset.format) {
-		log('String format mismatch');
-		return false;
+		let compatible;
+		switch (superset.format) {
+			case 'idn-email':
+				compatible = subset.format === 'email';
+				break;
+			case 'idn-hostname':
+				compatible = subset.format === 'hostname';
+				break;
+			case 'iri':
+				compatible = subset.format === 'uri' || subset.format === 'iri';
+				break;
+			case 'iri-reference':
+				compatible =
+					subset.format === 'uri' ||
+					subset.format === 'uri-reference' ||
+					subset.format === 'iri';
+				break;
+			case 'uri-reference':
+				compatible = subset.format === 'uri';
+				break;
+			default:
+				compatible = false;
+				break;
+		}
+		if (!compatible) {
+			// tslint:disable-next-line:no-unused-expression
+			log('String format mismatch');
+			return false;
+		}
 	}
 
 	if (superset.pattern && superset.pattern !== subset.pattern) {
@@ -495,7 +516,7 @@ function oneOfMatches(
 
 	if (
 		superset.oneOf &&
-		!one(superset.anyOf as JSONSchema[], (e) =>
+		!one(superset.oneOf as JSONSchema[], (e) =>
 			satisfies(subset, e, allowPartial)
 		)
 	) {

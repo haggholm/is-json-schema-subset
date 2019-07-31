@@ -1,8 +1,8 @@
 /* tslint:disable:no-console */
 
-import { JSONSchema } from 'json-schema-ref-parser';
-import jsf = require('json-schema-faker');
 import AJV = require('ajv');
+import jsf = require('json-schema-faker');
+import { JSONSchema } from 'json-schema-ref-parser';
 
 import satisfies from '../src/is-json-schema-subset';
 

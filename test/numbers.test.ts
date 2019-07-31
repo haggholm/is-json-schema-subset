@@ -82,6 +82,28 @@ test('fail maximum check (parent exclusive)', () =>
 		exclusiveMaximum: 10,
 	}));
 
+test('fail omitted maximum check (parent inclusive)', () =>
+	expect({
+		title: 'child',
+		type: 'number',
+		// @ts-ignore
+	}).toViolate({
+		title: 'parent',
+		type: 'number',
+		maximum: 10,
+	}));
+
+test('fail omitted maximum check (parent exclusive)', () =>
+	expect({
+		title: 'child',
+		type: 'number',
+		// @ts-ignore
+	}).toViolate({
+		title: 'parent',
+		type: 'number',
+		exclusiveMaximum: 10,
+	}));
+
 test('pass minimum check', () =>
 	expect({
 		title: 'child',
@@ -104,6 +126,28 @@ test('fail minimum check', () =>
 		title: 'parent',
 		type: 'number',
 		minimum: 10.1,
+	}));
+
+test('fail omitted minimum check (parent inclusive)', () =>
+	expect({
+		title: 'child',
+		type: 'number',
+		// @ts-ignore
+	}).toViolate({
+		title: 'parent',
+		type: 'number',
+		minimum: 10,
+	}));
+
+test('fail omitted minimum check (parent exclusive)', () =>
+	expect({
+		title: 'child',
+		type: 'number',
+		// @ts-ignore
+	}).toViolate({
+		title: 'parent',
+		type: 'number',
+		exclusiveMinimum: 10,
 	}));
 
 test('pass minimum check (both exclusive)', () =>
