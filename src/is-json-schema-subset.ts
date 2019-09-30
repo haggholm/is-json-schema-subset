@@ -100,7 +100,7 @@ function subsetHasNoExtraneousProps(
 ): boolean {
 	// Verify that the subset doesn't have extra properties violating the superset
 	if (superset.additionalProperties === false) {
-		const superProps = new Set(Object.keys(superset));
+		const superProps = new Set(Object.keys(superset.properties));
 		for (const prop of Object.keys(subset.properties || {})) {
 			if (!superProps.has(prop)) {
 				// tslint:disable-next-line:no-unused-expression
@@ -116,7 +116,8 @@ function subsetHasNoExtraneousProps(
 function subsetPropertiesMatch(
 	subset: JSONSchema,
 	superset: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean
 ): boolean {
 	const subProps = (subset.properties || {}) as {
 		[k: string]: JSONSchema;
@@ -130,7 +131,14 @@ function subsetPropertiesMatch(
 			continue;
 		}
 
-		if (!satisfies(subProps[prop], superProps[prop], allowPartial)) {
+		if (
+			!satisfies(
+				subProps[prop],
+				superProps[prop],
+				allowPartial,
+				allowAdditionalProps
+			)
+		) {
 			// tslint:disable-next-line:no-unused-expression
 			log('Property', prop, 'does not match');
 			return false;
@@ -227,7 +235,8 @@ function stringRulesMatch(
 function arrayRulesMatch(
 	subset: JSONSchema,
 	superset: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean
 ): boolean {
 	if (superset.type !== 'array') {
 		return true; // nop
@@ -269,7 +278,8 @@ function arrayRulesMatch(
 				!satisfies(
 					subset.items[i] as JSONSchema,
 					superset.items[i] as JSONSchema,
-					allowPartial
+					allowPartial,
+					allowAdditionalProps
 				)
 			) {
 				// tslint:disable-next-line:no-unused-expression
@@ -282,7 +292,8 @@ function arrayRulesMatch(
 			!satisfies(
 				subset.items as JSONSchema,
 				superset.items as JSONSchema,
-				allowPartial
+				allowPartial,
+				allowAdditionalProps
 			)
 		) {
 			// tslint:disable-next-line:no-unused-expression
@@ -454,27 +465,43 @@ function constMatch(
 	return true;
 }
 
-// function allOfMatches(subset: JSONSchema, superset:JSONSchema, allowPartial: boolean): boolean {
-//   if (subset.allOf && !all(subset.allOf, e => satisfies(e, superset))) {
-//     return false;
-//   }
-//
-//   if (superset.allOf && !all(superset.allOf, e => satisfies(subset, e))) {
-//     return false;
-//   }
-//
-//   return true;
-// }
+function allOfMatches(
+	subset: JSONSchema,
+	superset: JSONSchema,
+	allowPartial: boolean,
+	allowAdditionalProps: boolean
+): boolean {
+	if (
+		subset.allOf &&
+		!all(subset.allOf as JSONSchema[], (e) =>
+			satisfies(e, superset, allowPartial, allowAdditionalProps)
+		)
+	) {
+		return false;
+	}
+
+	if (
+		superset.allOf &&
+		!all(superset.allOf as JSONSchema[], (e) =>
+			satisfies(subset, e, allowPartial, allowAdditionalProps)
+		)
+	) {
+		return false;
+	}
+
+	return true;
+}
 
 function anyOfMatches(
 	subset: JSONSchema,
 	superset: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean
 ): boolean {
 	if (
 		subset.anyOf &&
 		!all(subset.anyOf as JSONSchema[], (e) =>
-			satisfies(e, superset, allowPartial)
+			satisfies(e, superset, allowPartial, allowAdditionalProps)
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
@@ -486,7 +513,7 @@ function anyOfMatches(
 	if (
 		superset.anyOf &&
 		!some(superset.anyOf as JSONSchema[], (e) =>
-			satisfies(subset, e, allowPartial)
+			satisfies(subset, e, allowPartial, allowAdditionalProps)
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
@@ -500,12 +527,13 @@ function anyOfMatches(
 function oneOfMatches(
 	subset: JSONSchema,
 	superset: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean
 ): boolean {
 	if (
 		subset.oneOf &&
 		!all(subset.oneOf as JSONSchema[], (e) =>
-			satisfies(e, superset, allowPartial)
+			satisfies(e, superset, allowPartial, allowAdditionalProps)
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
@@ -517,7 +545,7 @@ function oneOfMatches(
 	if (
 		superset.oneOf &&
 		!one(superset.oneOf as JSONSchema[], (e) =>
-			satisfies(subset, e, allowPartial)
+			satisfies(subset, e, allowPartial, allowAdditionalProps)
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
@@ -532,11 +560,17 @@ function oneOfMatches(
 function notMatches(
 	subset: JSONSchema,
 	superset: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean
 ): boolean {
 	if (
 		subset.not &&
-		satisfies(subset.not as JSONSchema, superset, allowPartial)
+		satisfies(
+			subset.not as JSONSchema,
+			superset,
+			allowPartial,
+			allowAdditionalProps
+		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 		log('Subset.not should not satisfy superset');
@@ -545,7 +579,12 @@ function notMatches(
 
 	if (
 		superset.not &&
-		satisfies(subset, superset.not as JSONSchema, allowPartial)
+		satisfies(
+			subset,
+			superset.not as JSONSchema,
+			allowPartial,
+			allowAdditionalProps
+		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 		log('Subset should not satisfy superset.not');
@@ -558,7 +597,8 @@ function notMatches(
 function satisfies(
 	subset: JSONSchema,
 	superset: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean
 ): boolean {
 	if (isEqual(subset, superset)) {
 		return true;
@@ -574,7 +614,15 @@ function satisfies(
 		throw new Error('Requires JSON schema draft version 5+');
 	}
 
-	for (const validator of [
+	if (superset.anyOf || subset.anyOf) {
+		return anyOfMatches(subset, superset, allowPartial, allowAdditionalProps);
+	} else if (superset.allOf || subset.allOf) {
+		return allOfMatches(subset, superset, allowPartial, allowAdditionalProps);
+	} else if (superset.oneOf || subset.oneOf) {
+		return oneOfMatches(subset, superset, allowPartial, allowAdditionalProps);
+	}
+
+	const validators = [
 		arrayRulesMatch,
 		constMatch,
 		numRulesMatch,
@@ -587,8 +635,13 @@ function satisfies(
 		anyOfMatches,
 		oneOfMatches,
 		notMatches,
-	]) {
-		if (!validator(subset, superset, allowPartial)) {
+	];
+	if (!allowAdditionalProps) {
+		validators.push(subsetHasNoExtraneousProps);
+	}
+
+	for (const validator of validators) {
+		if (!validator(subset, superset, allowPartial, allowAdditionalProps)) {
 			// tslint:disable-next-line:no-unused-expression
 			log('Validator failed:', validator.name);
 			return false;
@@ -602,8 +655,17 @@ export { JSONSchema };
 export default async function subsetSatisfies(
 	subset: JSONSchema,
 	superset: JSONSchema,
-	allowPartial: boolean = false
+	opts: boolean | { allowPartial?: boolean; allowAdditionalProps?: boolean } = false
 ): Promise<boolean> {
+	let allowPartial = false;
+	let allowAdditionalProps = false;
+	if (typeof opts === 'boolean') {
+		allowPartial = opts;
+	} else if (typeof opts === 'object' && opts !== null) {
+		allowPartial = opts.allowPartial;
+		allowAdditionalProps = opts.allowAdditionalProps;
+	}
+
 	const [sub, sup] = await Promise.all([
 		RefParser.bundle(
 			subset.$schema ? subset : { ...subset, $schema: defaultSchema }
@@ -612,5 +674,10 @@ export default async function subsetSatisfies(
 			superset.$schema ? superset : { ...superset, $schema: defaultSchema }
 		),
 	]);
-	return satisfies(mergeAllOf(sub), mergeAllOf(sup), allowPartial);
+	return satisfies(
+		mergeAllOf(sub),
+		mergeAllOf(sup),
+		allowPartial,
+		allowAdditionalProps
+	);
 }
