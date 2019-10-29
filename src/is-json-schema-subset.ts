@@ -60,33 +60,30 @@ function one<T>(elements: T[], condition: (val: T) => boolean): boolean {
 // }
 
 function typeMatches(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean
 ): boolean {
 	const match =
-		subset.type === superset.type ||
-		(superset.type === 'number' && subset.type === 'integer');
+		input.type === target.type ||
+		(target.type === 'number' && input.type === 'integer');
 
 	if (!match) {
 		// tslint:disable-next-line:no-unused-expression
 
-		log(`Type mismatch: ${subset.type} does not satisfy ${superset.type}`);
+		log(`Type mismatch: ${input.type} does not satisfy ${target.type}`);
 	}
 	return match;
 }
 
-function subsetHasRequiredProps(
-	subset: JSONSchema,
-	superset: JSONSchema
-): boolean {
-	// Verify that the superset doesn't require anything missing from the subset
-	const subsetRequires = new Set(subset.required || []);
-	for (const prop of superset.required || []) {
-		if (!subsetRequires.has(prop)) {
+function inputHasRequiredProps(input: JSONSchema, target: JSONSchema): boolean {
+	// Verify that the target doesn't require anything missing from the input
+	const inputRequires = new Set(input.required || []);
+	for (const prop of target.required || []) {
+		if (!inputRequires.has(prop)) {
 			// tslint:disable-next-line:no-unused-expression
 
-			log('Subset does not require necessary property', prop);
+			log('input does not require necessary property', prop);
 			return false;
 		}
 	}
@@ -94,17 +91,17 @@ function subsetHasRequiredProps(
 	return true;
 }
 
-function subsetHasNoExtraneousProps(
-	subset: JSONSchema,
-	superset: JSONSchema
+function inputHasNoExtraneousProps(
+	input: JSONSchema,
+	target: JSONSchema
 ): boolean {
-	// Verify that the subset doesn't have extra properties violating the superset
-	if (superset.additionalProperties === false) {
-		const superProps = new Set(Object.keys(superset.properties));
-		for (const prop of Object.keys(subset.properties || {})) {
+	// Verify that the input doesn't have extra properties violating the target
+	if (target.additionalProperties === false) {
+		const superProps = new Set(Object.keys(target.properties));
+		for (const prop of Object.keys(input.properties || {})) {
 			if (!superProps.has(prop)) {
 				// tslint:disable-next-line:no-unused-expression
-				log('Subset has extraneous property', prop);
+				log('input has extraneous property', prop);
 				return false;
 			}
 		}
@@ -113,16 +110,16 @@ function subsetHasNoExtraneousProps(
 	return true;
 }
 
-function subsetPropertiesMatch(
-	subset: JSONSchema,
-	superset: JSONSchema,
+function inputPropertiesMatch(
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean,
 	allowAdditionalProps: boolean
 ): boolean {
-	const subProps = (subset.properties || {}) as {
+	const subProps = (input.properties || {}) as {
 		[k: string]: JSONSchema;
 	};
-	const superProps = (superset.properties || {}) as {
+	const superProps = (target.properties || {}) as {
 		[k: string]: JSONSchema;
 	};
 
@@ -149,34 +146,34 @@ function subsetPropertiesMatch(
 }
 
 function stringRulesMatch(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean
 ): boolean {
-	if (superset.type !== 'string') {
+	if (target.type !== 'string') {
 		return true; // nop
 	}
 
-	if (superset.format && superset.format !== subset.format) {
+	if (target.format && target.format !== input.format) {
 		let compatible;
-		switch (superset.format) {
+		switch (target.format) {
 			case 'idn-email':
-				compatible = subset.format === 'email';
+				compatible = input.format === 'email';
 				break;
 			case 'idn-hostname':
-				compatible = subset.format === 'hostname';
+				compatible = input.format === 'hostname';
 				break;
 			case 'iri':
-				compatible = subset.format === 'uri' || subset.format === 'iri';
+				compatible = input.format === 'uri' || input.format === 'iri';
 				break;
 			case 'iri-reference':
 				compatible =
-					subset.format === 'uri' ||
-					subset.format === 'uri-reference' ||
-					subset.format === 'iri';
+					input.format === 'uri' ||
+					input.format === 'uri-reference' ||
+					input.format === 'iri';
 				break;
 			case 'uri-reference':
-				compatible = subset.format === 'uri';
+				compatible = input.format === 'uri';
 				break;
 			default:
 				compatible = false;
@@ -189,41 +186,39 @@ function stringRulesMatch(
 		}
 	}
 
-	if (superset.pattern && superset.pattern !== subset.pattern) {
+	if (target.pattern && target.pattern !== input.pattern) {
 		// tslint:disable-next-line:no-unused-expression
 		log('String pattern mismatch');
 		return false;
 	}
 
 	if (
-		superset.hasOwnProperty('minLength') &&
-		(!subset.hasOwnProperty('minLength') ||
-			subset.minLength < superset.minLength)
+		target.hasOwnProperty('minLength') &&
+		(!input.hasOwnProperty('minLength') || input.minLength < target.minLength)
 	) {
-		log('Subset minLength is less than superset');
+		log('input minLength is less than target');
 		return false;
 	}
 	if (
-		superset.hasOwnProperty('maxLength') &&
-		(!subset.hasOwnProperty('maxLength') ||
-			subset.maxLength > superset.maxLength)
+		target.hasOwnProperty('maxLength') &&
+		(!input.hasOwnProperty('maxLength') || input.maxLength > target.maxLength)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('Subset maxLength is less than superset');
+		log('input maxLength is less than target');
 		return false;
 	}
 
-	if (superset.hasOwnProperty('enum')) {
-		if (!subset.hasOwnProperty('enum')) {
+	if (target.hasOwnProperty('enum')) {
+		if (!input.hasOwnProperty('enum')) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset is missing enum');
+			log('input is missing enum');
 			return false;
 		}
-		const enums = new Set(superset.enum);
-		for (const e of subset.enum) {
+		const enums = new Set(target.enum);
+		for (const e of input.enum) {
 			if (!enums.has(e)) {
 				// tslint:disable-next-line:no-unused-expression
-				log('Subset is missing enum:', e);
+				log('target', Array.from(enums), 'is missing enum:', e);
 				return false;
 			}
 		}
@@ -233,51 +228,51 @@ function stringRulesMatch(
 }
 
 function arrayRulesMatch(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean,
 	allowAdditionalProps: boolean
 ): boolean {
-	if (superset.type !== 'array') {
+	if (target.type !== 'array') {
 		return true; // nop
 	}
 
 	if (
-		superset.hasOwnProperty('minItems') &&
-		(!subset.hasOwnProperty('minItems') || subset.minItems < superset.minItems)
+		target.hasOwnProperty('minItems') &&
+		(!input.hasOwnProperty('minItems') || input.minItems < target.minItems)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('Subset minItems is less than superset');
+		log('input minItems is less than target');
 		return false;
 	}
 	if (
-		superset.hasOwnProperty('maxItems') &&
-		(!subset.hasOwnProperty('maxItems') || subset.maxItems > superset.maxItems)
+		target.hasOwnProperty('maxItems') &&
+		(!input.hasOwnProperty('maxItems') || input.maxItems > target.maxItems)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('Subset maxItems is more than superset');
+		log('input maxItems is more than target');
 		return false;
 	}
 
-	if (Array.isArray(superset.items)) {
-		if (!subset.hasOwnProperty('items')) {
-			log('Subset is missing items');
+	if (Array.isArray(target.items)) {
+		if (!input.hasOwnProperty('items')) {
+			log('input is missing items');
 			return false;
 		}
 
 		if (
-			!Array.isArray(subset.items) ||
-			superset.items.length !== subset.items.length
+			!Array.isArray(input.items) ||
+			target.items.length !== input.items.length
 		) {
 			// tslint:disable-next-line:no-unused-expression
 			log('Tuple item count mismatch');
 			return false;
 		}
-		for (let i = 0, len = superset.items.length; i < len; i++) {
+		for (let i = 0, len = target.items.length; i < len; i++) {
 			if (
 				!satisfies(
-					subset.items[i] as JSONSchema,
-					superset.items[i] as JSONSchema,
+					input.items[i] as JSONSchema,
+					target.items[i] as JSONSchema,
 					allowPartial,
 					allowAdditionalProps
 				)
@@ -290,8 +285,8 @@ function arrayRulesMatch(
 	} else {
 		if (
 			!satisfies(
-				subset.items as JSONSchema,
-				superset.items as JSONSchema,
+				input.items as JSONSchema,
+				target.items as JSONSchema,
 				allowPartial,
 				allowAdditionalProps
 			)
@@ -302,9 +297,9 @@ function arrayRulesMatch(
 		}
 	}
 
-	if (superset.uniqueItems && !subset.uniqueItems) {
+	if (target.uniqueItems && !input.uniqueItems) {
 		// tslint:disable-next-line:no-unused-expression
-		log('Subset does not require uniqueItems');
+		log('input does not require uniqueItems');
 		return false;
 	}
 
@@ -312,137 +307,133 @@ function arrayRulesMatch(
 }
 
 function numRulesMatch(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean
 ): boolean {
-	if (superset.type !== 'integer' && superset.type !== 'number') {
+	if (target.type !== 'integer' && target.type !== 'number') {
 		return true; // nop
 	}
 
-	if (superset.hasOwnProperty('maximum')) {
+	if (target.hasOwnProperty('maximum')) {
 		if (
-			!subset.hasOwnProperty('maximum') &&
-			!subset.hasOwnProperty('exclusiveMaximum')
+			!input.hasOwnProperty('maximum') &&
+			!input.hasOwnProperty('exclusiveMaximum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset has no maximum property');
+			log('input has no maximum property');
 			return false;
 		}
 
 		if (
-			subset.hasOwnProperty('maximum') &&
-			(subset.maximum as number) > (superset.maximum as number)
+			input.hasOwnProperty('maximum') &&
+			(input.maximum as number) > (target.maximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset permits greater maximum');
+			log('input permits greater maximum');
 			return false;
 		}
 		if (
-			subset.hasOwnProperty('exclusiveMaximum') &&
-			(subset.exclusiveMaximum as number) > (superset.maximum as number)
+			input.hasOwnProperty('exclusiveMaximum') &&
+			(input.exclusiveMaximum as number) > (target.maximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset permits greater maximum (exclusive)');
+			log('input permits greater maximum (exclusive)');
 			return false;
 		}
 	}
 
-	if (superset.hasOwnProperty('exclusiveMaximum')) {
+	if (target.hasOwnProperty('exclusiveMaximum')) {
 		if (
-			!subset.hasOwnProperty('maximum') &&
-			!subset.hasOwnProperty('exclusiveMaximum')
+			!input.hasOwnProperty('maximum') &&
+			!input.hasOwnProperty('exclusiveMaximum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset has no maximum property');
+			log('input has no maximum property');
 			return false;
 		}
 
 		if (
-			subset.hasOwnProperty('maximum') &&
-			subset.maximum >= superset.exclusiveMaximum
+			input.hasOwnProperty('maximum') &&
+			input.maximum >= target.exclusiveMaximum
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset permits greater maximum');
+			log('input permits greater maximum');
 			return false;
 		}
 		if (
-			subset.hasOwnProperty('exclusiveMaximum') &&
-			(subset.exclusiveMaximum as number) >
-				(superset.exclusiveMaximum as number)
+			input.hasOwnProperty('exclusiveMaximum') &&
+			(input.exclusiveMaximum as number) > (target.exclusiveMaximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset permits greater exclusiveMaximum');
+			log('input permits greater exclusiveMaximum');
 			return false;
 		}
 	}
 
-	if (superset.hasOwnProperty('minimum')) {
+	if (target.hasOwnProperty('minimum')) {
 		if (
-			!subset.hasOwnProperty('minimum') &&
-			!subset.hasOwnProperty('exclusiveMinimum')
+			!input.hasOwnProperty('minimum') &&
+			!input.hasOwnProperty('exclusiveMinimum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset has no minimum property');
+			log('input has no minimum property');
 			return false;
 		}
 
-		if (subset.hasOwnProperty('minimum') && subset.minimum < superset.minimum) {
+		if (input.hasOwnProperty('minimum') && input.minimum < target.minimum) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset permits greater minimum');
+			log('input permits greater minimum');
 			return false;
 		}
 		if (
-			subset.hasOwnProperty('exclusiveMinimum') &&
-			subset.exclusiveMinimum < superset.minimum
+			input.hasOwnProperty('exclusiveMinimum') &&
+			input.exclusiveMinimum < target.minimum
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset permits greater minimum');
+			log('input permits greater minimum');
 			return false;
 		}
 	}
 
-	if (superset.hasOwnProperty('exclusiveMinimum')) {
+	if (target.hasOwnProperty('exclusiveMinimum')) {
 		if (
-			!subset.hasOwnProperty('minimum') &&
-			!subset.hasOwnProperty('exclusiveMinimum')
+			!input.hasOwnProperty('minimum') &&
+			!input.hasOwnProperty('exclusiveMinimum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset has no minimum property');
+			log('input has no minimum property');
 			return false;
 		}
 
 		if (
-			subset.hasOwnProperty('minimum') &&
-			(subset.minimum as number) <= (superset.exclusiveMinimum as number)
+			input.hasOwnProperty('minimum') &&
+			(input.minimum as number) <= (target.exclusiveMinimum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset permits smaller minimum');
+			log('input permits smaller minimum');
 			return false;
 		}
 		if (
-			subset.hasOwnProperty('exclusiveMinimum') &&
-			(subset.exclusiveMinimum as number) <
-				(superset.exclusiveMinimum as number)
+			input.hasOwnProperty('exclusiveMinimum') &&
+			(input.exclusiveMinimum as number) < (target.exclusiveMinimum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset permits greater exclusiveMinimum');
+			log('input permits greater exclusiveMinimum');
 			return false;
 		}
 	}
 
-	if (superset.multipleOf) {
-		if (!subset.multipleOf) {
+	if (target.multipleOf) {
+		if (!input.multipleOf) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Subset lacks multipleOf');
+			log('input lacks multipleOf');
 			return false;
 		}
-		if (subset.multipleOf % superset.multipleOf !== 0) {
+		if (input.multipleOf % target.multipleOf !== 0) {
 			// tslint:disable-next-line:no-unused-expression
 
-			log(
-				'Subset multipleOf is not an integer multiple of superset multipleOf'
-			);
+			log('input multipleOf is not an integer multiple of target multipleOf');
 			return false;
 		}
 	}
@@ -451,14 +442,14 @@ function numRulesMatch(
 }
 
 function constMatch(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean
 ): boolean {
-	if (superset.const && superset.const !== subset.const) {
+	if (target.const && target.const !== input.const) {
 		// tslint:disable-next-line:no-unused-expression
 
-		log(`Subset const mismatch (${superset.const} !== ${subset.const})`);
+		log(`input const mismatch (${target.const} !== ${input.const})`);
 		return false;
 	}
 
@@ -466,24 +457,24 @@ function constMatch(
 }
 
 function allOfMatches(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean,
 	allowAdditionalProps: boolean
 ): boolean {
 	if (
-		subset.allOf &&
-		!all(subset.allOf as JSONSchema[], (e) =>
-			satisfies(e, superset, allowPartial, allowAdditionalProps)
+		input.allOf &&
+		!all(input.allOf as JSONSchema[], (e) =>
+			satisfies(e, target, allowPartial, allowAdditionalProps)
 		)
 	) {
 		return false;
 	}
 
 	if (
-		superset.allOf &&
-		!all(superset.allOf as JSONSchema[], (e) =>
-			satisfies(subset, e, allowPartial, allowAdditionalProps)
+		target.allOf &&
+		!all(target.allOf as JSONSchema[], (e) =>
+			satisfies(input, e, allowPartial, allowAdditionalProps)
 		)
 	) {
 		return false;
@@ -493,31 +484,34 @@ function allOfMatches(
 }
 
 function anyOfMatches(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean,
 	allowAdditionalProps: boolean
 ): boolean {
+	// If input can be anyOf [a,b,...], then each of them must be accepted
+	// by the target.
 	if (
-		subset.anyOf &&
-		!all(subset.anyOf as JSONSchema[], (e) =>
-			satisfies(e, superset, allowPartial, allowAdditionalProps)
+		input.anyOf &&
+		!all(input.anyOf as JSONSchema[], (e) =>
+			satisfies(e, target, allowPartial, allowAdditionalProps)
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-
-		log('Some subset.anyOf elements do not satisfy superset');
+		log('Some input.anyOf elements do not satisfy target');
 		return false;
 	}
 
+	// If the target can accept anyOf [a,b,...], then it's enough
+	// that at least one is satisfied by the input
 	if (
-		superset.anyOf &&
-		!some(superset.anyOf as JSONSchema[], (e) =>
-			satisfies(subset, e, allowPartial, allowAdditionalProps)
+		target.anyOf &&
+		!some(target.anyOf as JSONSchema[], (e) =>
+			satisfies(input, e, allowPartial, allowAdditionalProps)
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('Subset does not satisfy any of superset.anyOf');
+		log('input does not satisfy any of target.anyOf');
 		return false;
 	}
 
@@ -525,32 +519,32 @@ function anyOfMatches(
 }
 
 function oneOfMatches(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean,
 	allowAdditionalProps: boolean
 ): boolean {
 	if (
-		subset.oneOf &&
-		!all(subset.oneOf as JSONSchema[], (e) =>
-			satisfies(e, superset, allowPartial, allowAdditionalProps)
+		input.oneOf &&
+		!all(input.oneOf as JSONSchema[], (e) =>
+			satisfies(e, target, allowPartial, allowAdditionalProps)
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 
-		log('Some subset.oneOf elements do not satisfy superset');
+		log('Some input.oneOf elements do not satisfy target');
 		return false;
 	}
 
 	if (
-		superset.oneOf &&
-		!one(superset.oneOf as JSONSchema[], (e) =>
-			satisfies(subset, e, allowPartial, allowAdditionalProps)
+		target.oneOf &&
+		!one(target.oneOf as JSONSchema[], (e) =>
+			satisfies(input, e, allowPartial, allowAdditionalProps)
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 
-		log('Subset does not satisfy exactly one of superset.oneOf');
+		log('input does not satisfy exactly one of target.oneOf');
 		return false;
 	}
 
@@ -558,36 +552,36 @@ function oneOfMatches(
 }
 
 function notMatches(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean,
 	allowAdditionalProps: boolean
 ): boolean {
 	if (
-		subset.not &&
+		input.not &&
 		satisfies(
-			subset.not as JSONSchema,
-			superset,
+			input.not as JSONSchema,
+			target,
 			allowPartial,
 			allowAdditionalProps
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('Subset.not should not satisfy superset');
+		log('input.not should not satisfy target');
 		return false;
 	}
 
 	if (
-		superset.not &&
+		target.not &&
 		satisfies(
-			subset,
-			superset.not as JSONSchema,
+			input,
+			target.not as JSONSchema,
 			allowPartial,
 			allowAdditionalProps
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('Subset should not satisfy superset.not');
+		log('input should not satisfy target.not');
 		return false;
 	}
 
@@ -595,31 +589,31 @@ function notMatches(
 }
 
 function satisfies(
-	subset: JSONSchema,
-	superset: JSONSchema,
+	input: JSONSchema,
+	target: JSONSchema,
 	allowPartial: boolean,
 	allowAdditionalProps: boolean
 ): boolean {
-	if (isEqual(subset, superset)) {
+	if (isEqual(input, target)) {
 		return true;
-	} else if (isEqual(superset, {})) {
+	} else if (isEqual(target, {})) {
 		return true;
 	}
 
 	const draftRegex = /draft-0[1234]\/schema/;
 	if (
-		draftRegex.test(subset.$schema || '') ||
-		draftRegex.test(superset.$schema || '')
+		draftRegex.test(input.$schema || '') ||
+		draftRegex.test(target.$schema || '')
 	) {
 		throw new Error('Requires JSON schema draft version 5+');
 	}
 
-	if (superset.anyOf || subset.anyOf) {
-		return anyOfMatches(subset, superset, allowPartial, allowAdditionalProps);
-	} else if (superset.allOf || subset.allOf) {
-		return allOfMatches(subset, superset, allowPartial, allowAdditionalProps);
-	} else if (superset.oneOf || subset.oneOf) {
-		return oneOfMatches(subset, superset, allowPartial, allowAdditionalProps);
+	if (target.anyOf || input.anyOf) {
+		return anyOfMatches(input, target, allowPartial, allowAdditionalProps);
+	} else if (target.allOf || input.allOf) {
+		return allOfMatches(input, target, allowPartial, allowAdditionalProps);
+	} else if (target.oneOf || input.oneOf) {
+		return oneOfMatches(input, target, allowPartial, allowAdditionalProps);
 	}
 
 	const validators = [
@@ -627,9 +621,9 @@ function satisfies(
 		constMatch,
 		numRulesMatch,
 		stringRulesMatch,
-		subsetHasNoExtraneousProps,
-		subsetHasRequiredProps,
-		subsetPropertiesMatch,
+		inputHasNoExtraneousProps,
+		inputHasRequiredProps,
+		inputPropertiesMatch,
 		typeMatches,
 
 		anyOfMatches,
@@ -637,11 +631,11 @@ function satisfies(
 		notMatches,
 	];
 	if (!allowAdditionalProps) {
-		validators.push(subsetHasNoExtraneousProps);
+		validators.push(inputHasNoExtraneousProps);
 	}
 
 	for (const validator of validators) {
-		if (!validator(subset, superset, allowPartial, allowAdditionalProps)) {
+		if (!validator(input, target, allowPartial, allowAdditionalProps)) {
 			// tslint:disable-next-line:no-unused-expression
 			log('Validator failed:', validator.name);
 			return false;
@@ -652,10 +646,12 @@ function satisfies(
 }
 
 export { JSONSchema };
-export default async function subsetSatisfies(
-	subset: JSONSchema,
-	superset: JSONSchema,
-	opts: boolean | { allowPartial?: boolean; allowAdditionalProps?: boolean } = false
+export default async function inputSatisfies(
+	input: JSONSchema,
+	target: JSONSchema,
+	opts:
+		| boolean
+		| { allowPartial?: boolean; allowAdditionalProps?: boolean } = false
 ): Promise<boolean> {
 	let allowPartial = false;
 	let allowAdditionalProps = false;
@@ -667,11 +663,11 @@ export default async function subsetSatisfies(
 	}
 
 	const [sub, sup] = await Promise.all([
-		RefParser.bundle(
-			subset.$schema ? subset : { ...subset, $schema: defaultSchema }
+		RefParser.dereference(
+			input.$schema ? input : { ...input, $schema: defaultSchema }
 		),
-		RefParser.bundle(
-			superset.$schema ? superset : { ...superset, $schema: defaultSchema }
+		RefParser.dereference(
+			target.$schema ? target : { ...target, $schema: defaultSchema }
 		),
 	]);
 	return satisfies(
