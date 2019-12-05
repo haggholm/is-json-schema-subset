@@ -53,7 +53,7 @@ test('reject additional properties', () =>
 		},
 	}));
 
-test('accept arbitrary schema when unspecified', () =>
+test('accept arbitrary object schema when unspecified', () =>
 	expect({
 		title: 'child',
 		type: 'object',
@@ -70,6 +70,19 @@ test('accept arbitrary schema when unspecified', () =>
 		title: 'parent',
 		type: 'object',
 	}));
+
+test('accept arbitrary schema when unspecified', () =>
+	Promise.all(
+		[
+			{ type: 'boolean' },
+			{ type: 'string' },
+			{ type: 'integer' },
+			{ type: 'number' },
+			{ type: 'array', items: { type: 'number' } },
+			{ type: 'integer' },
+			// @ts-ignore
+		].map((child) => expect(child).toSatisfy({}))
+	));
 
 test('accept oneOf', () =>
 	expect({

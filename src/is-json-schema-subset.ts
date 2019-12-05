@@ -64,6 +64,10 @@ function typeMatches(
 	target: JSONSchema,
 	allowPartial: boolean
 ): boolean {
+	if (isEqual(target, {})) {
+		return true;
+	}
+
 	const match =
 		input.type === target.type ||
 		(target.type === 'number' && input.type === 'integer');
@@ -600,14 +604,6 @@ function satisfies(
 		return true;
 	}
 
-	const draftRegex = /draft-0[1234]\/schema/;
-	if (
-		draftRegex.test(input.$schema || '') ||
-		draftRegex.test(target.$schema || '')
-	) {
-		throw new Error('Requires JSON schema draft version 5+');
-	}
-
 	if (target.anyOf || input.anyOf) {
 		return anyOfMatches(input, target, allowPartial, allowAdditionalProps);
 	} else if (target.allOf || input.allOf) {
@@ -662,6 +658,14 @@ export default async function inputSatisfies(
 		allowAdditionalProps = opts.allowAdditionalProps;
 	}
 
+	const draftRegex = /draft-0[1234]\/schema/;
+	if (
+		draftRegex.test(input.$schema ?? defaultSchema) ||
+		draftRegex.test(target.$schema ?? defaultSchema)
+	) {
+		throw new Error('Requires JSON schema draft version 5+');
+	}
+
 	const [sub, sup] = await Promise.all([
 		RefParser.dereference(
 			input.$schema ? input : { ...input, $schema: defaultSchema }
@@ -671,9 +675,27 @@ export default async function inputSatisfies(
 		),
 	]);
 	return satisfies(
-		mergeAllOf(sub),
-		mergeAllOf(sup),
+		clean(mergeAllOf(sub)),
+		clean(mergeAllOf(sup)),
 		allowPartial,
 		allowAdditionalProps
 	);
+}
+
+function clean(schema: JSONSchema) {
+	if (typeof schema !== 'object' || schema === null) {
+		return schema;
+	}
+
+	const res = {};
+	let changed = false;
+	for (const key of Object.keys(schema)) {
+		if (key.startsWith('$')) {
+			changed = true;
+		} else {
+			res[key] = schema[key];
+		}
+	}
+
+	return changed ? res : schema;
 }
