@@ -34,7 +34,7 @@
     "preversion": "run-p -l lint test"
   },
   "dependencies": {
-    "@types/node": "^12.6.8",
+    "@types/node": "^12.12.17",
     "fast-deep-equal": "^3.1.1",
     "json-schema-merge-allof": "^0.7.0",
     "json-schema-ref-parser": "^7.1.2"
