@@ -40,7 +40,7 @@
     "json-schema-ref-parser": "^7.1.2"
   },
   "devDependencies": {
-    "@types/jest": "^24.0.23",
+    "@types/jest": "^25.1.0",
     "ajv": "^6.10.2",
     "coveralls": "^3.0.9",
     "jest": "^24.9.0",
