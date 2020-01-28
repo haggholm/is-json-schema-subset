@@ -74,6 +74,7 @@ test('accept arbitrary object schema when unspecified', () =>
 test('accept arbitrary schema when unspecified', () =>
 	Promise.all(
 		[
+			{},
 			{ type: 'boolean' },
 			{ type: 'string' },
 			{ type: 'integer' },
