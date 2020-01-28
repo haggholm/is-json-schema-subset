@@ -23,7 +23,7 @@
   "scripts": {
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "compile": "tsc",
-    "compress": "terser dist/is-json-schema-subset.js --define process.env.DEBUG=0 --config-file .terserrc -o dist/is-json-schema-subset.min.js",
+    "compress": "terser dist/is-json-schema-subset.js --config-file .terserrc -o dist/is-json-schema-subset.min.js",
     "coverage": "jest --coverage --coverageReporters=text-lcov | coveralls",
     "lint": "tslint --project .",
     "lint-fix": "run-p -l tslint-fix sort-package-json",

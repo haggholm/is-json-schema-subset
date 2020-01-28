@@ -1,9 +1,10 @@
 /* tslint:disable:no-console */
 
-import isEqual from 'fast-deep-equal';
-import mergeAllOf from 'json-schema-merge-allof';
-import RefParser, { JSONSchema } from 'json-schema-ref-parser';
-import mkDebug from 'debug';
+import isEqual = require('fast-deep-equal');
+import mergeAllOf = require('json-schema-merge-allof');
+import RefParser = require('json-schema-ref-parser');
+import { JSONSchema } from 'json-schema-ref-parser';
+import mkDebug = require('debug');
 
 const debug = mkDebug('is-json-schema-subset');
 
@@ -15,11 +16,9 @@ interface Paths {
 }
 
 function formatPathCallback(v: string | number) {
-	return typeof v === 'number'
-		? `[${v}]`
-		: /^[A-Za-z0-9_$]+$/.test(v)
+	return typeof v === 'string' && /^[A-Za-z0-9_$]+$/.test(v)
 		? `.${v}`
-		: `["${v}"]`;
+		: `[${JSON.stringify(v)}]`;
 }
 function formatPath(path: Readonly<(string | number)[]>): string {
 	return [path[0], ...path.slice(1).map(formatPathCallback)].join('');

@@ -4,7 +4,7 @@
     "declaration": true,
     "declarationDir": "dist",
     "downlevelIteration": true,
-    "esModuleInterop": true,
+    "esModuleInterop": false,
     "inlineSourceMap": true,
     "module": "commonjs",
     "moduleResolution": "node",
