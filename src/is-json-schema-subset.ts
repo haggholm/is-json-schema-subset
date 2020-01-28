@@ -3,27 +3,56 @@
 import isEqual from 'fast-deep-equal';
 import mergeAllOf from 'json-schema-merge-allof';
 import RefParser, { JSONSchema } from 'json-schema-ref-parser';
+import mkDebug from 'debug';
+
+const debug = mkDebug('is-json-schema-subset');
 
 const defaultSchema = 'http://json-schema.org/draft-07/schema#';
 
-function log(...args: any[]) {
-	if (process.env.DEBUG) {
-		console.log(...args);
+interface Paths {
+	input: Readonly<(string | number)[]>;
+	target: Readonly<(string | number)[]>;
+}
+
+function formatPathCallback(v: string | number) {
+	return typeof v === 'number'
+		? `[${v}]`
+		: /^[A-Za-z0-9_$]+$/.test(v)
+		? `.${v}`
+		: `["${v}"]`;
+}
+function formatPath(path: Readonly<(string | number)[]>): string {
+	return [path[0], ...path.slice(1).map(formatPathCallback)].join('');
+}
+
+function formatPaths(paths: Paths): string[] {
+	return [formatPath(paths.input), '/', formatPath(paths.target)];
+}
+
+function log(paths: Paths, ...args: any[]) {
+	if (process.env.DEBUG || process.env.NODE_ENV !== 'production') {
+		debug(...args, 'at', ...formatPaths(paths));
 	}
 }
 
-function all<T>(elements: T[], condition: (val: T) => boolean): boolean {
-	for (const el of elements) {
-		if (!condition(el)) {
+function all<T>(
+	elements: T[],
+	condition: (val: T, idx: number) => boolean
+): boolean {
+	for (let i = 0, len = elements.length; i < len; i++) {
+		if (!condition(elements[i], i)) {
 			return false;
 		}
 	}
 	return true;
 }
 
-function some<T>(elements: T[], condition: (val: T) => boolean): boolean {
-	for (const el of elements) {
-		if (condition(el)) {
+function some<T>(
+	elements: T[],
+	condition: (val: T, idx: number) => boolean
+): boolean {
+	for (let i = 0, len = elements.length; i < len; i++) {
+		if (condition(elements[i], i)) {
 			return true;
 		}
 	}
@@ -40,10 +69,13 @@ function some<T>(elements: T[], condition: (val: T) => boolean): boolean {
 // 	return false;
 // }
 
-function one<T>(elements: T[], condition: (val: T) => boolean): boolean {
+function one<T>(
+	elements: T[],
+	condition: (val: T, idx: number) => boolean
+): boolean {
 	let matches = 0;
-	for (const el of elements) {
-		if (condition(el) && ++matches >= 2) {
+	for (let i = 0, len = elements.length; i < len; i++) {
+		if (condition(elements[i], i) && ++matches >= 2) {
 			return false;
 		}
 	}
@@ -62,7 +94,9 @@ function one<T>(elements: T[], condition: (val: T) => boolean): boolean {
 function typeMatches(
 	input: JSONSchema,
 	target: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	if (isEqual(target, {})) {
 		return true;
@@ -74,20 +108,24 @@ function typeMatches(
 
 	if (!match) {
 		// tslint:disable-next-line:no-unused-expression
-
-		log(`Type mismatch: ${input.type} does not satisfy ${target.type}`);
+		log(paths, `Type mismatch: ${input.type} does not satisfy ${target.type}`);
 	}
 	return match;
 }
 
-function inputHasRequiredProps(input: JSONSchema, target: JSONSchema): boolean {
+function inputHasRequiredProps(
+	input: JSONSchema,
+	target: JSONSchema,
+	allowPartial: boolean,
+	allowAdditionalProps: boolean,
+	paths: Paths
+): boolean {
 	// Verify that the target doesn't require anything missing from the input
-	const inputRequires = new Set(input.required || []);
-	for (const prop of target.required || []) {
+	const inputRequires = new Set(input.required ?? []);
+	for (const prop of target.required ?? []) {
 		if (!inputRequires.has(prop)) {
 			// tslint:disable-next-line:no-unused-expression
-
-			log('input does not require necessary property', prop);
+			log(paths, 'input does not guarantee required property', prop);
 			return false;
 		}
 	}
@@ -97,15 +135,18 @@ function inputHasRequiredProps(input: JSONSchema, target: JSONSchema): boolean {
 
 function inputHasNoExtraneousProps(
 	input: JSONSchema,
-	target: JSONSchema
+	target: JSONSchema,
+	allowPartial: boolean,
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	// Verify that the input doesn't have extra properties violating the target
 	if (target.additionalProperties === false) {
 		const superProps = new Set(Object.keys(target.properties));
-		for (const prop of Object.keys(input.properties || {})) {
+		for (const prop of Object.keys(input.properties ?? {})) {
 			if (!superProps.has(prop)) {
 				// tslint:disable-next-line:no-unused-expression
-				log('input has extraneous property', prop);
+				log(paths, 'input has extraneous property', prop);
 				return false;
 			}
 		}
@@ -118,12 +159,13 @@ function inputPropertiesMatch(
 	input: JSONSchema,
 	target: JSONSchema,
 	allowPartial: boolean,
-	allowAdditionalProps: boolean
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
-	const subProps = (input.properties || {}) as {
+	const subProps = (input.properties ?? {}) as {
 		[k: string]: JSONSchema;
 	};
-	const superProps = (target.properties || {}) as {
+	const superProps = (target.properties ?? {}) as {
 		[k: string]: JSONSchema;
 	};
 
@@ -137,11 +179,15 @@ function inputPropertiesMatch(
 				subProps[prop],
 				superProps[prop],
 				allowPartial,
-				allowAdditionalProps
+				allowAdditionalProps,
+				{
+					input: paths.input.concat([prop]),
+					target: paths.target.concat([prop]),
+				}
 			)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Property', prop, 'does not match');
+			log(paths, 'Property', prop, 'does not match');
 			return false;
 		}
 	}
@@ -152,7 +198,9 @@ function inputPropertiesMatch(
 function stringRulesMatch(
 	input: JSONSchema,
 	target: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	if (target.type !== 'string') {
 		return true; // nop
@@ -185,14 +233,14 @@ function stringRulesMatch(
 		}
 		if (!compatible) {
 			// tslint:disable-next-line:no-unused-expression
-			log('String format mismatch');
+			log(paths, 'String format mismatch');
 			return false;
 		}
 	}
 
 	if (target.pattern && target.pattern !== input.pattern) {
 		// tslint:disable-next-line:no-unused-expression
-		log('String pattern mismatch');
+		log(paths, 'String pattern mismatch');
 		return false;
 	}
 
@@ -200,7 +248,7 @@ function stringRulesMatch(
 		target.hasOwnProperty('minLength') &&
 		(!input.hasOwnProperty('minLength') || input.minLength < target.minLength)
 	) {
-		log('input minLength is less than target');
+		log(paths, 'input minLength is less than target');
 		return false;
 	}
 	if (
@@ -208,21 +256,21 @@ function stringRulesMatch(
 		(!input.hasOwnProperty('maxLength') || input.maxLength > target.maxLength)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('input maxLength is less than target');
+		log(paths, 'input maxLength is less than target');
 		return false;
 	}
 
 	if (target.hasOwnProperty('enum')) {
 		if (!input.hasOwnProperty('enum')) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input is missing enum');
+			log(paths, 'input is missing enum');
 			return false;
 		}
 		const enums = new Set(target.enum);
 		for (const e of input.enum) {
 			if (!enums.has(e)) {
 				// tslint:disable-next-line:no-unused-expression
-				log('target', Array.from(enums), 'is missing enum:', e);
+				log(paths, 'target', Array.from(enums), 'is missing enum:', e);
 				return false;
 			}
 		}
@@ -235,7 +283,8 @@ function arrayRulesMatch(
 	input: JSONSchema,
 	target: JSONSchema,
 	allowPartial: boolean,
-	allowAdditionalProps: boolean
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	if (target.type !== 'array') {
 		return true; // nop
@@ -246,7 +295,7 @@ function arrayRulesMatch(
 		(!input.hasOwnProperty('minItems') || input.minItems < target.minItems)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('input minItems is less than target');
+		log(paths, 'input minItems is less than target');
 		return false;
 	}
 	if (
@@ -254,13 +303,13 @@ function arrayRulesMatch(
 		(!input.hasOwnProperty('maxItems') || input.maxItems > target.maxItems)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('input maxItems is more than target');
+		log(paths, 'input maxItems is more than target');
 		return false;
 	}
 
 	if (Array.isArray(target.items)) {
 		if (!input.hasOwnProperty('items')) {
-			log('input is missing items');
+			log(paths, 'input is missing items');
 			return false;
 		}
 
@@ -269,7 +318,7 @@ function arrayRulesMatch(
 			target.items.length !== input.items.length
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Tuple item count mismatch');
+			log(paths, 'Tuple item count mismatch');
 			return false;
 		}
 		for (let i = 0, len = target.items.length; i < len; i++) {
@@ -278,11 +327,15 @@ function arrayRulesMatch(
 					input.items[i] as JSONSchema,
 					target.items[i] as JSONSchema,
 					allowPartial,
-					allowAdditionalProps
+					allowAdditionalProps,
+					{
+						input: paths.input.concat([i]),
+						target: paths.target.concat([i]),
+					}
 				)
 			) {
 				// tslint:disable-next-line:no-unused-expression
-				log('Tuple items mismatch (see previous error)');
+				log(paths, 'Tuple items mismatch (see previous error)');
 				return false;
 			}
 		}
@@ -292,18 +345,22 @@ function arrayRulesMatch(
 				input.items as JSONSchema,
 				target.items as JSONSchema,
 				allowPartial,
-				allowAdditionalProps
+				allowAdditionalProps,
+				{
+					input: paths.input.concat(['items']),
+					target: paths.target.concat(['items']),
+				}
 			)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Array items mismatch (see previous error)');
+			log(paths, 'Array items mismatch (see previous error)');
 			return false;
 		}
 	}
 
 	if (target.uniqueItems && !input.uniqueItems) {
 		// tslint:disable-next-line:no-unused-expression
-		log('input does not require uniqueItems');
+		log(paths, 'input does not require uniqueItems');
 		return false;
 	}
 
@@ -313,7 +370,9 @@ function arrayRulesMatch(
 function numRulesMatch(
 	input: JSONSchema,
 	target: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	if (target.type !== 'integer' && target.type !== 'number') {
 		return true; // nop
@@ -325,7 +384,7 @@ function numRulesMatch(
 			!input.hasOwnProperty('exclusiveMaximum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input has no maximum property');
+			log(paths, 'input has no maximum property');
 			return false;
 		}
 
@@ -334,7 +393,7 @@ function numRulesMatch(
 			(input.maximum as number) > (target.maximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input permits greater maximum');
+			log(paths, 'input permits greater maximum');
 			return false;
 		}
 		if (
@@ -342,7 +401,7 @@ function numRulesMatch(
 			(input.exclusiveMaximum as number) > (target.maximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input permits greater maximum (exclusive)');
+			log(paths, 'input permits greater maximum (exclusive)');
 			return false;
 		}
 	}
@@ -353,7 +412,7 @@ function numRulesMatch(
 			!input.hasOwnProperty('exclusiveMaximum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input has no maximum property');
+			log(paths, 'input has no maximum property');
 			return false;
 		}
 
@@ -362,7 +421,7 @@ function numRulesMatch(
 			input.maximum >= target.exclusiveMaximum
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input permits greater maximum');
+			log(paths, 'input permits greater maximum');
 			return false;
 		}
 		if (
@@ -370,7 +429,7 @@ function numRulesMatch(
 			(input.exclusiveMaximum as number) > (target.exclusiveMaximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input permits greater exclusiveMaximum');
+			log(paths, 'input permits greater exclusiveMaximum');
 			return false;
 		}
 	}
@@ -381,13 +440,13 @@ function numRulesMatch(
 			!input.hasOwnProperty('exclusiveMinimum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input has no minimum property');
+			log(paths, 'input has no minimum property');
 			return false;
 		}
 
 		if (input.hasOwnProperty('minimum') && input.minimum < target.minimum) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input permits greater minimum');
+			log(paths, 'input permits greater minimum');
 			return false;
 		}
 		if (
@@ -395,7 +454,7 @@ function numRulesMatch(
 			input.exclusiveMinimum < target.minimum
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input permits greater minimum');
+			log(paths, 'input permits greater minimum');
 			return false;
 		}
 	}
@@ -406,7 +465,7 @@ function numRulesMatch(
 			!input.hasOwnProperty('exclusiveMinimum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input has no minimum property');
+			log(paths, 'input has no minimum property');
 			return false;
 		}
 
@@ -415,7 +474,7 @@ function numRulesMatch(
 			(input.minimum as number) <= (target.exclusiveMinimum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input permits smaller minimum');
+			log(paths, 'input permits smaller minimum');
 			return false;
 		}
 		if (
@@ -423,7 +482,7 @@ function numRulesMatch(
 			(input.exclusiveMinimum as number) < (target.exclusiveMinimum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input permits greater exclusiveMinimum');
+			log(paths, 'input permits greater exclusiveMinimum');
 			return false;
 		}
 	}
@@ -431,13 +490,16 @@ function numRulesMatch(
 	if (target.multipleOf) {
 		if (!input.multipleOf) {
 			// tslint:disable-next-line:no-unused-expression
-			log('input lacks multipleOf');
+			log(paths, 'input lacks multipleOf');
 			return false;
 		}
 		if (input.multipleOf % target.multipleOf !== 0) {
 			// tslint:disable-next-line:no-unused-expression
 
-			log('input multipleOf is not an integer multiple of target multipleOf');
+			log(
+				paths,
+				'input multipleOf is not an integer multiple of target multipleOf'
+			);
 			return false;
 		}
 	}
@@ -448,12 +510,13 @@ function numRulesMatch(
 function constMatch(
 	input: JSONSchema,
 	target: JSONSchema,
-	allowPartial: boolean
+	allowPartial: boolean,
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	if (target.const && target.const !== input.const) {
 		// tslint:disable-next-line:no-unused-expression
-
-		log(`input const mismatch (${target.const} !== ${input.const})`);
+		log(paths, `input const mismatch (${target.const} !== ${input.const})`);
 		return false;
 	}
 
@@ -464,12 +527,16 @@ function allOfMatches(
 	input: JSONSchema,
 	target: JSONSchema,
 	allowPartial: boolean,
-	allowAdditionalProps: boolean
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	if (
 		input.allOf &&
-		!all(input.allOf as JSONSchema[], (e) =>
-			satisfies(e, target, allowPartial, allowAdditionalProps)
+		!all(input.allOf as JSONSchema[], (e, idx) =>
+			satisfies(e, target, allowPartial, allowAdditionalProps, {
+				input: paths.input.concat(['allOf', idx]),
+				target: paths.target,
+			})
 		)
 	) {
 		return false;
@@ -477,8 +544,11 @@ function allOfMatches(
 
 	if (
 		target.allOf &&
-		!all(target.allOf as JSONSchema[], (e) =>
-			satisfies(input, e, allowPartial, allowAdditionalProps)
+		!all(target.allOf as JSONSchema[], (e, idx) =>
+			satisfies(input, e, allowPartial, allowAdditionalProps, {
+				input: paths.input,
+				target: paths.target.concat(['allOf', idx]),
+			})
 		)
 	) {
 		return false;
@@ -491,18 +561,22 @@ function anyOfMatches(
 	input: JSONSchema,
 	target: JSONSchema,
 	allowPartial: boolean,
-	allowAdditionalProps: boolean
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	// If input can be anyOf [a,b,...], then each of them must be accepted
 	// by the target.
 	if (
 		input.anyOf &&
-		!all(input.anyOf as JSONSchema[], (e) =>
-			satisfies(e, target, allowPartial, allowAdditionalProps)
+		!all(input.anyOf as JSONSchema[], (e, idx) =>
+			satisfies(e, target, allowPartial, allowAdditionalProps, {
+				input: paths.input.concat(['anyOf', idx]),
+				target: paths.target,
+			})
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('Some input.anyOf elements do not satisfy target');
+		log(paths, 'Some input.anyOf elements do not satisfy target');
 		return false;
 	}
 
@@ -510,12 +584,15 @@ function anyOfMatches(
 	// that at least one is satisfied by the input
 	if (
 		target.anyOf &&
-		!some(target.anyOf as JSONSchema[], (e) =>
-			satisfies(input, e, allowPartial, allowAdditionalProps)
+		!some(target.anyOf as JSONSchema[], (e, idx) =>
+			satisfies(input, e, allowPartial, allowAdditionalProps, {
+				input: paths.input,
+				target: paths.target.concat(['anyOf', idx]),
+			})
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('input does not satisfy any of target.anyOf');
+		log(paths, 'input does not satisfy any of target.anyOf');
 		return false;
 	}
 
@@ -526,29 +603,35 @@ function oneOfMatches(
 	input: JSONSchema,
 	target: JSONSchema,
 	allowPartial: boolean,
-	allowAdditionalProps: boolean
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	if (
 		input.oneOf &&
-		!all(input.oneOf as JSONSchema[], (e) =>
-			satisfies(e, target, allowPartial, allowAdditionalProps)
+		!all(input.oneOf as JSONSchema[], (e, idx) =>
+			satisfies(e, target, allowPartial, allowAdditionalProps, {
+				input: paths.input.concat(['oneOf', idx]),
+				target: paths.target,
+			})
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-
-		log('Some input.oneOf elements do not satisfy target');
+		log(paths, 'Some input.oneOf elements do not satisfy target');
 		return false;
 	}
 
 	if (
 		target.oneOf &&
-		!one(target.oneOf as JSONSchema[], (e) =>
-			satisfies(input, e, allowPartial, allowAdditionalProps)
+		!one(target.oneOf as JSONSchema[], (e, idx) =>
+			satisfies(input, e, allowPartial, allowAdditionalProps, {
+				input: paths.input,
+				target: paths.target.concat(['oneOf', idx]),
+			})
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 
-		log('input does not satisfy exactly one of target.oneOf');
+		log(paths, 'input does not satisfy exactly one of target.oneOf');
 		return false;
 	}
 
@@ -559,7 +642,8 @@ function notMatches(
 	input: JSONSchema,
 	target: JSONSchema,
 	allowPartial: boolean,
-	allowAdditionalProps: boolean
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	if (
 		input.not &&
@@ -567,11 +651,15 @@ function notMatches(
 			input.not as JSONSchema,
 			target,
 			allowPartial,
-			allowAdditionalProps
+			allowAdditionalProps,
+			{
+				input: paths.input.concat(['not']),
+				target: paths.target,
+			}
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('input.not should not satisfy target');
+		log(paths, 'input.not should not satisfy target');
 		return false;
 	}
 
@@ -581,11 +669,15 @@ function notMatches(
 			input,
 			target.not as JSONSchema,
 			allowPartial,
-			allowAdditionalProps
+			allowAdditionalProps,
+			{
+				input: paths.input,
+				target: paths.target.concat(['not']),
+			}
 		)
 	) {
 		// tslint:disable-next-line:no-unused-expression
-		log('input should not satisfy target.not');
+		log(paths, 'input should not satisfy target.not');
 		return false;
 	}
 
@@ -596,7 +688,8 @@ function satisfies(
 	input: JSONSchema,
 	target: JSONSchema,
 	allowPartial: boolean,
-	allowAdditionalProps: boolean
+	allowAdditionalProps: boolean,
+	paths: Paths
 ): boolean {
 	if (isEqual(input, target)) {
 		return true;
@@ -605,11 +698,29 @@ function satisfies(
 	}
 
 	if (target.anyOf || input.anyOf) {
-		return anyOfMatches(input, target, allowPartial, allowAdditionalProps);
+		return anyOfMatches(
+			input,
+			target,
+			allowPartial,
+			allowAdditionalProps,
+			paths
+		);
 	} else if (target.allOf || input.allOf) {
-		return allOfMatches(input, target, allowPartial, allowAdditionalProps);
+		return allOfMatches(
+			input,
+			target,
+			allowPartial,
+			allowAdditionalProps,
+			paths
+		);
 	} else if (target.oneOf || input.oneOf) {
-		return oneOfMatches(input, target, allowPartial, allowAdditionalProps);
+		return oneOfMatches(
+			input,
+			target,
+			allowPartial,
+			allowAdditionalProps,
+			paths
+		);
 	}
 
 	const validators = [
@@ -631,9 +742,9 @@ function satisfies(
 	}
 
 	for (const validator of validators) {
-		if (!validator(input, target, allowPartial, allowAdditionalProps)) {
+		if (!validator(input, target, allowPartial, allowAdditionalProps, paths)) {
 			// tslint:disable-next-line:no-unused-expression
-			log('Validator failed:', validator.name);
+			log(paths, 'Validator failed:', validator.name);
 			return false;
 		}
 	}
@@ -678,7 +789,8 @@ export default async function inputSatisfies(
 		clean(mergeAllOf(sub)),
 		clean(mergeAllOf(sup)),
 		allowPartial,
-		allowAdditionalProps
+		allowAdditionalProps,
+		{ input: ['input'], target: ['target'] }
 	);
 }
 
