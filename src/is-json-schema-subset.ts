@@ -30,7 +30,8 @@ function formatPaths(paths: Paths): string[] {
 
 function log(paths: Paths, ...args: any[]) {
 	if (process.env.DEBUG || process.env.NODE_ENV !== 'production') {
-		debug(...args, 'at', ...formatPaths(paths));
+		const indent = Math.max(paths.input.length, paths.target.length);
+		debug(''.padStart(indent, ' '), ...args, 'at', ...formatPaths(paths));
 	}
 }
 
@@ -129,6 +130,7 @@ function inputHasRequiredProps(
 		}
 	}
 
+	// log(paths, 'passes required properties check');
 	return true;
 }
 
@@ -151,6 +153,7 @@ function inputHasNoExtraneousProps(
 		}
 	}
 
+	// log(paths, 'passes extraneous properties check');
 	return true;
 }
 
@@ -191,7 +194,78 @@ function inputPropertiesMatch(
 		}
 	}
 
+	// log(paths, 'passes properties checks');
 	return true;
+}
+
+function calculateEffectiveMinLength(
+	schema: JSONSchema &
+		(
+			| { type: 'string' }
+			| { allOf: JSONSchema[] }
+			| { anyOf: JSONSchema[] }
+			| { oneOf: JSONSchema[] }
+		)
+) {
+	if (schema.type === 'string') {
+		if (schema.minLength !== undefined) {
+			return schema.minLength;
+		} else if (schema.enum) {
+			return Math.min(...schema.enum.map((s) => s.length));
+		}
+	} else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
+		return Math.min(
+			(schema.allOf ?? schema.anyOf ?? schema.oneOf).map((s) =>
+				calculateEffectiveMinLength(s)
+			)
+		);
+	} else {
+		return -1;
+	}
+}
+
+function calculateEffectiveMaxLength(
+	schema: JSONSchema &
+		(
+			| { type: 'string' }
+			| { allOf: JSONSchema[] }
+			| { anyOf: JSONSchema[] }
+			| { oneOf: JSONSchema[] }
+		)
+) {
+	if (schema.type === 'string') {
+		if (schema.minLength !== undefined) {
+			return schema.minLength;
+		} else if (schema.enum) {
+			return Math.max(...schema.enum.map((s) => s.length));
+		}
+	} else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
+		return Math.max(
+			(schema.allOf ?? schema.anyOf ?? schema.oneOf).map((s) =>
+				calculateEffectiveMaxLength(s)
+			)
+		);
+	} else {
+		return -1;
+	}
+}
+
+function gatherEnumValues(s: JSONSchema): string[] | undefined {
+	if (s.type === 'string') {
+		return s.enum;
+	} else if (s.allOf ?? s.anyOf ?? s.oneOf) {
+		try {
+			return [].concat(
+				((s.allOf ?? s.anyOf ?? s.oneOf) as JSONSchema[]).map((s) =>
+					gatherEnumValues(s)
+				)
+			);
+		} catch (err) {
+			return undefined;
+		}
+	} else {
+		throw new Error(`Cannot gather enums from node of type ${s.type}`);
+	}
 }
 
 function stringRulesMatch(
@@ -245,14 +319,14 @@ function stringRulesMatch(
 
 	if (
 		target.hasOwnProperty('minLength') &&
-		(!input.hasOwnProperty('minLength') || input.minLength < target.minLength)
+		calculateEffectiveMinLength(input) < target.minLength
 	) {
 		log(paths, 'input minLength is less than target');
 		return false;
 	}
 	if (
 		target.hasOwnProperty('maxLength') &&
-		(!input.hasOwnProperty('maxLength') || input.maxLength > target.maxLength)
+		calculateEffectiveMaxLength(input) > target.maxLength
 	) {
 		// tslint:disable-next-line:no-unused-expression
 		log(paths, 'input maxLength is less than target');
@@ -260,21 +334,29 @@ function stringRulesMatch(
 	}
 
 	if (target.hasOwnProperty('enum')) {
-		if (!input.hasOwnProperty('enum')) {
+		const inputEnums = gatherEnumValues(input);
+		if (inputEnums === undefined) {
 			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input is missing enum');
+			log(paths, 'input is missing enum restrictions');
 			return false;
 		}
 		const enums = new Set(target.enum);
-		for (const e of input.enum) {
+		for (const e of inputEnums) {
 			if (!enums.has(e)) {
 				// tslint:disable-next-line:no-unused-expression
-				log(paths, 'target', Array.from(enums), 'is missing enum:', e);
+				log(
+					paths,
+					'target',
+					Array.from(enums),
+					'is missing possible input enum:',
+					e
+				);
 				return false;
 			}
 		}
 	}
 
+	// log(paths, 'passes string checks');
 	return true;
 }
 
@@ -363,6 +445,7 @@ function arrayRulesMatch(
 		return false;
 	}
 
+	// log(paths, 'passes array check');
 	return true;
 }
 
@@ -503,6 +586,7 @@ function numRulesMatch(
 		}
 	}
 
+	// log(paths, 'passes number checks');
 	return true;
 }
 
@@ -519,6 +603,7 @@ function constMatch(
 		return false;
 	}
 
+	// log(paths, 'passes const check');
 	return true;
 }
 
@@ -553,6 +638,7 @@ function allOfMatches(
 		return false;
 	}
 
+	// log(paths, 'passes allOf check');
 	return true;
 }
 
@@ -595,6 +681,7 @@ function anyOfMatches(
 		return false;
 	}
 
+	// log(paths, 'passes anyOf check');
 	return true;
 }
 
@@ -605,18 +692,27 @@ function oneOfMatches(
 	allowAdditionalProps: boolean,
 	paths: Paths
 ): boolean {
-	if (
-		input.oneOf &&
-		!all(input.oneOf as JSONSchema[], (e, idx) =>
+	if (input.oneOf) {
+		const cond = (e, idx) =>
 			satisfies(e, target, allowPartial, allowAdditionalProps, {
 				input: paths.input.concat(['oneOf', idx]),
 				target: paths.target,
-			})
-		)
-	) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'Some input.oneOf elements do not satisfy target');
-		return false;
+			});
+		const matching =
+			process.env.NODE_ENV === 'production'
+				? all(input.oneOf as JSONSchema[], cond)
+				: (input.oneOf as JSONSchema[]).filter(cond).length;
+		if (!matching) {
+			// tslint:disable-next-line:no-unused-expression
+			log(
+				paths,
+				matching === false ||
+					(matching as number) < (input.oneOf as JSONSchema[]).length
+					? 'Some input.oneOf elements do not satisfy target'
+					: 'No input.oneOf elements satisfy target'
+			);
+			return false;
+		}
 	}
 
 	if (
@@ -634,6 +730,7 @@ function oneOfMatches(
 		return false;
 	}
 
+	// log(paths, 'passes oneOf check');
 	return true;
 }
 
@@ -680,8 +777,17 @@ function notMatches(
 		return false;
 	}
 
+	// log(paths, 'passes "not" check');
 	return true;
 }
+
+type Validator = (
+	input: JSONSchema,
+	target: JSONSchema,
+	allowPartial: boolean,
+	allowAdditionalProps: boolean,
+	paths: Paths
+) => boolean;
 
 function satisfies(
 	input: JSONSchema,
@@ -722,7 +828,7 @@ function satisfies(
 		);
 	}
 
-	const validators = [
+	const validators: Validator[] = [
 		arrayRulesMatch,
 		constMatch,
 		numRulesMatch,
@@ -748,6 +854,7 @@ function satisfies(
 		}
 	}
 
+	// log(paths, 'passes all checks');
 	return true;
 }
 
