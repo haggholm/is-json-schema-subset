@@ -29,10 +29,8 @@ function formatPaths(paths: Paths): string[] {
 }
 
 function log(paths: Paths, ...args: any[]) {
-	if (process.env.DEBUG || process.env.NODE_ENV !== 'production') {
-		const indent = Math.max(paths.input.length, paths.target.length);
-		debug(''.padStart(indent, ' '), ...args, 'at', ...formatPaths(paths));
-	}
+	const indent = Math.max(paths.input.length, paths.target.length);
+	debug(''.padStart(indent, ' '), ...args, 'at', ...formatPaths(paths));
 }
 
 function all<T>(
@@ -40,56 +38,90 @@ function all<T>(
 	condition: (val: T, idx: number) => boolean
 ): boolean {
 	for (let i = 0, len = elements.length; i < len; i++) {
-		if (!condition(elements[i], i)) {
+		const res = condition(elements[i], i);
+		if (!res) {
 			return false;
 		}
 	}
 	return true;
 }
 
-function some<T>(
+function allConds<T>(
 	elements: T[],
-	condition: (val: T, idx: number) => boolean
-): boolean {
+	condition: (val: T, idx: number) => ValidatorResult
+): ValidatorResult {
 	for (let i = 0, len = elements.length; i < len; i++) {
-		if (condition(elements[i], i)) {
-			return true;
+		const res = condition(elements[i], i);
+		if (!res[0]) {
+			return res;
 		}
 	}
-	return false;
+	return [true];
 }
 
-// function multiple<T>(elements: T[], condition: (val: T) => boolean): boolean {
-// 	let matches = 0;
-// 	for (const el of elements) {
-// 		if (condition(el) && ++matches >= 2) {
-// 			return true;
-// 		}
-// 	}
-// 	return false;
-// }
-
-function one<T>(
+function someConds<T>(
 	elements: T[],
-	condition: (val: T, idx: number) => boolean
-): boolean {
+	condition: (val: T, idx: number) => ValidatorResult,
+	paths: Paths
+): ValidatorResult {
+	const errors: ValidatorErrors[] = [];
+	for (let i = 0, len = elements.length; i < len; i++) {
+		const res = condition(elements[i], i);
+		if (res[0]) {
+			return [true];
+		} else {
+			errors.push(...res[1]);
+		}
+	}
+	return [
+		false,
+		errors.length === 0 ? [{ paths, msg: 'No elements found' }] : errors,
+	];
+}
+
+function oneCond<T>(
+	elements: T[],
+	condition: (val: T, idx: number) => ValidatorResult,
+	paths: Paths
+): ValidatorResult {
 	let matches = 0;
+	const errors: ValidatorErrors[] = [];
 	for (let i = 0, len = elements.length; i < len; i++) {
-		if (condition(elements[i], i) && ++matches >= 2) {
-			return false;
+		const [ok, errs] = condition(elements[i], i);
+		if (ok) {
+			if (++matches >= 2) {
+				return [false, [{ paths, msg: 'Multiple elements match' }]];
+			}
+		} else {
+			errors.push(...errs);
 		}
 	}
-	return matches === 1;
+	return matches === 1
+		? [true]
+		: errors.length > 0
+		? [false, errors.concat([{ paths, msg: 'No elements match' }])]
+		: [false, [{ paths, msg: 'No elements match' }]];
 }
 
-// function none<T>(elements: T[], condition: (val: T) => boolean): boolean {
-// 	for (const el of elements) {
-// 		if (condition(el)) {
-// 			return false;
-// 		}
-// 	}
-// 	return true;
-// }
+function checkConditions(
+	conditions: (
+		| [Paths, boolean, () => ValidatorResult, string]
+		| [Paths, boolean, ValidatorResult, string]
+	)[]
+): ValidatorResult {
+	for (let i = 0, len = conditions.length; i < len; i++) {
+		const [paths, runCheck, fn, errStr] = conditions[i];
+		if (runCheck) {
+			const [ok, errors] = typeof fn === 'function' ? fn() : fn;
+			if (!ok) {
+				errors.push({ paths, msg: errStr });
+				return [false, errors];
+			}
+		}
+	}
+
+	return [true];
+}
 
 function typeMatches(
 	input: JSONSchema,
@@ -97,9 +129,9 @@ function typeMatches(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
+): ValidatorResult {
 	if (isEqual(target, {})) {
-		return true;
+		return [true];
 	}
 
 	const match =
@@ -108,9 +140,17 @@ function typeMatches(
 
 	if (!match) {
 		// tslint:disable-next-line:no-unused-expression
-		log(paths, `Type mismatch: ${input.type} does not satisfy ${target.type}`);
+		return [
+			false,
+			[
+				{
+					paths,
+					msg: `Type mismatch: ${input.type} does not satisfy ${target.type}`,
+				},
+			],
+		];
 	}
-	return match;
+	return [true];
 }
 
 function inputHasRequiredProps(
@@ -119,19 +159,19 @@ function inputHasRequiredProps(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
+): ValidatorResult {
 	// Verify that the target doesn't require anything missing from the input
 	const inputRequires = new Set(input.required ?? []);
 	for (const prop of target.required ?? []) {
 		if (!inputRequires.has(prop)) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input does not guarantee required property', prop);
-			return false;
+			return [
+				false,
+				[{ paths, msg: `input does not guarantee required property ${prop}` }],
+			];
 		}
 	}
 
-	// log(paths, 'passes required properties check');
-	return true;
+	return [true];
 }
 
 function inputHasNoExtraneousProps(
@@ -140,21 +180,21 @@ function inputHasNoExtraneousProps(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
+): ValidatorResult {
 	// Verify that the input doesn't have extra properties violating the target
 	if (target.additionalProperties === false) {
 		const superProps = new Set(Object.keys(target.properties));
 		for (const prop of Object.keys(input.properties ?? {})) {
 			if (!superProps.has(prop)) {
-				// tslint:disable-next-line:no-unused-expression
-				log(paths, 'input has extraneous property', prop);
-				return false;
+				return [
+					false,
+					[{ paths, msg: `input has extraneous property: ${prop}` }],
+				];
 			}
 		}
 	}
 
-	// log(paths, 'passes extraneous properties check');
-	return true;
+	return [true];
 }
 
 function inputPropertiesMatch(
@@ -163,7 +203,7 @@ function inputPropertiesMatch(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
+): ValidatorResult {
 	const subProps = (input.properties ?? {}) as {
 		[k: string]: JSONSchema;
 	};
@@ -176,26 +216,25 @@ function inputPropertiesMatch(
 			continue;
 		}
 
-		if (
-			!satisfies(
-				subProps[prop],
-				superProps[prop],
-				allowPartial,
-				allowAdditionalProps,
-				{
-					input: paths.input.concat([prop]),
-					target: paths.target.concat([prop]),
-				}
-			)
-		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'Property', prop, 'does not match');
-			return false;
+		const [ok, errors] = satisfies(
+			subProps[prop],
+			superProps[prop],
+			allowPartial,
+			allowAdditionalProps,
+			{
+				input: paths.input.concat([prop]),
+				target: paths.target.concat([prop]),
+			}
+		);
+		if (!ok) {
+			return [
+				false,
+				errors.concat([{ paths, msg: `Property ${prop} does not match` }]),
+			];
 		}
 	}
 
-	// log(paths, 'passes properties checks');
-	return true;
+	return [true];
 }
 
 function calculateEffectiveMinLength(
@@ -250,21 +289,21 @@ function calculateEffectiveMaxLength(
 	}
 }
 
-function gatherEnumValues(s: JSONSchema): string[] | undefined {
-	if (s.type === 'string') {
-		return s.enum;
-	} else if (s.allOf ?? s.anyOf ?? s.oneOf) {
+function gatherEnumValues(schema: JSONSchema): string[] | undefined {
+	if (schema.type === 'string') {
+		return schema.enum;
+	} else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
 		try {
 			return [].concat(
-				((s.allOf ?? s.anyOf ?? s.oneOf) as JSONSchema[]).map((s) =>
-					gatherEnumValues(s)
-				)
+				((schema.allOf ??
+					schema.anyOf ??
+					schema.oneOf) as JSONSchema[]).map((s) => gatherEnumValues(s))
 			);
 		} catch (err) {
 			return undefined;
 		}
 	} else {
-		throw new Error(`Cannot gather enums from node of type ${s.type}`);
+		throw new Error(`Cannot gather enums from node of type ${schema.type}`);
 	}
 }
 
@@ -274,9 +313,9 @@ function stringRulesMatch(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
+): ValidatorResult {
 	if (target.type !== 'string') {
-		return true; // nop
+		return [true]; // nop
 	}
 
 	if (target.format && target.format !== input.format) {
@@ -305,59 +344,51 @@ function stringRulesMatch(
 				break;
 		}
 		if (!compatible) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'String format mismatch');
-			return false;
+			return [false, [{ paths, msg: 'String format mismatch' }]];
 		}
 	}
 
 	if (target.pattern && target.pattern !== input.pattern) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'String pattern mismatch');
-		return false;
+		return [false, [{ paths, msg: 'String pattern mismatch' }]];
 	}
 
 	if (
 		target.hasOwnProperty('minLength') &&
 		calculateEffectiveMinLength(input) < target.minLength
 	) {
-		log(paths, 'input minLength is less than target');
-		return false;
+		return [false, [{ paths, msg: 'input minLength is less than target' }]];
 	}
 	if (
 		target.hasOwnProperty('maxLength') &&
 		calculateEffectiveMaxLength(input) > target.maxLength
 	) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'input maxLength is less than target');
-		return false;
+		return [false, [{ paths, msg: 'input maxLength is less than target' }]];
 	}
 
 	if (target.hasOwnProperty('enum')) {
 		const inputEnums = gatherEnumValues(input);
 		if (inputEnums === undefined) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input is missing enum restrictions');
-			return false;
+			return [false, [{ paths, msg: 'input is missing enum restrictions' }]];
 		}
 		const enums = new Set(target.enum);
 		for (const e of inputEnums) {
 			if (!enums.has(e)) {
-				// tslint:disable-next-line:no-unused-expression
-				log(
-					paths,
-					'target',
-					Array.from(enums),
-					'is missing possible input enum:',
-					e
-				);
-				return false;
+				return [
+					false,
+					[
+						{
+							paths,
+							msg: `target [${Array.from(enums).join(
+								', '
+							)}] is missing possible input enum: "${e}"`,
+						},
+					],
+				];
 			}
 		}
 	}
 
-	// log(paths, 'passes string checks');
-	return true;
+	return [true];
 }
 
 function arrayRulesMatch(
@@ -366,87 +397,81 @@ function arrayRulesMatch(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
+): ValidatorResult {
 	if (target.type !== 'array') {
-		return true; // nop
+		return [true]; // nop
 	}
 
 	if (
 		target.hasOwnProperty('minItems') &&
 		(!input.hasOwnProperty('minItems') || input.minItems < target.minItems)
 	) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'input minItems is less than target');
-		return false;
+		return [false, [{ paths, msg: 'input minItems is less than target' }]];
 	}
 	if (
 		target.hasOwnProperty('maxItems') &&
 		(!input.hasOwnProperty('maxItems') || input.maxItems > target.maxItems)
 	) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'input maxItems is more than target');
-		return false;
+		return [false, [{ paths, msg: 'input maxItems is more than target' }]];
 	}
 
 	if (Array.isArray(target.items)) {
 		if (!input.hasOwnProperty('items')) {
-			log(paths, 'input is missing items');
-			return false;
+			return [false, [{ paths, msg: 'input is missing items' }]];
 		}
 
 		if (
 			!Array.isArray(input.items) ||
 			target.items.length !== input.items.length
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'Tuple item count mismatch');
-			return false;
+			return [false, [{ paths, msg: 'Tuple item count mismatch' }]];
 		}
 		for (let i = 0, len = target.items.length; i < len; i++) {
-			if (
-				!satisfies(
-					input.items[i] as JSONSchema,
-					target.items[i] as JSONSchema,
-					allowPartial,
-					allowAdditionalProps,
-					{
-						input: paths.input.concat([i]),
-						target: paths.target.concat([i]),
-					}
-				)
-			) {
-				// tslint:disable-next-line:no-unused-expression
-				log(paths, 'Tuple items mismatch (see previous error)');
-				return false;
-			}
-		}
-	} else {
-		if (
-			!satisfies(
-				input.items as JSONSchema,
-				target.items as JSONSchema,
+			const [ok, errors] = satisfies(
+				input.items[i] as JSONSchema,
+				target.items[i] as JSONSchema,
 				allowPartial,
 				allowAdditionalProps,
 				{
-					input: paths.input.concat(['items']),
-					target: paths.target.concat(['items']),
+					input: paths.input.concat([i]),
+					target: paths.target.concat([i]),
 				}
-			)
-		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'Array items mismatch (see previous error)');
-			return false;
+			);
+			if (!ok) {
+				return [
+					false,
+					errors.concat([
+						{ paths, msg: 'Tuple items mismatch (see previous error)' },
+					]),
+				];
+			}
+		}
+	} else {
+		const [ok, errors] = satisfies(
+			input.items as JSONSchema,
+			target.items as JSONSchema,
+			allowPartial,
+			allowAdditionalProps,
+			{
+				input: paths.input.concat(['items']),
+				target: paths.target.concat(['items']),
+			}
+		);
+		if (!ok) {
+			return [
+				false,
+				errors.concat([
+					{ paths, msg: 'Array items mismatch (see previous error)' },
+				]),
+			];
 		}
 	}
 
 	if (target.uniqueItems && !input.uniqueItems) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'input does not require uniqueItems');
-		return false;
+		return [false, [{ paths, msg: 'input does not require uniqueItems' }]];
 	}
 
-	// log(paths, 'passes array check');
-	return true;
+	return [true];
 }
 
 function numRulesMatch(
@@ -455,9 +480,9 @@ function numRulesMatch(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
+): ValidatorResult {
 	if (target.type !== 'integer' && target.type !== 'number') {
-		return true; // nop
+		return [true]; // nop
 	}
 
 	if (target.hasOwnProperty('maximum')) {
@@ -465,26 +490,23 @@ function numRulesMatch(
 			!input.hasOwnProperty('maximum') &&
 			!input.hasOwnProperty('exclusiveMaximum')
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input has no maximum property');
-			return false;
+			return [false, [{ paths, msg: 'input has no maximum property' }]];
 		}
 
 		if (
 			input.hasOwnProperty('maximum') &&
 			(input.maximum as number) > (target.maximum as number)
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input permits greater maximum');
-			return false;
+			return [false, [{ paths, msg: 'input permits greater maximum' }]];
 		}
 		if (
 			input.hasOwnProperty('exclusiveMaximum') &&
 			(input.exclusiveMaximum as number) > (target.maximum as number)
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input permits greater maximum (exclusive)');
-			return false;
+			return [
+				false,
+				[{ paths, msg: 'input permits greater maximum (exclusive)' }],
+			];
 		}
 	}
 
@@ -493,26 +515,23 @@ function numRulesMatch(
 			!input.hasOwnProperty('maximum') &&
 			!input.hasOwnProperty('exclusiveMaximum')
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input has no maximum property');
-			return false;
+			return [false, [{ paths, msg: 'input has no maximum property' }]];
 		}
 
 		if (
 			input.hasOwnProperty('maximum') &&
 			input.maximum >= target.exclusiveMaximum
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input permits greater maximum');
-			return false;
+			return [false, [{ paths, msg: 'input permits greater maximum' }]];
 		}
 		if (
 			input.hasOwnProperty('exclusiveMaximum') &&
 			(input.exclusiveMaximum as number) > (target.exclusiveMaximum as number)
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input permits greater exclusiveMaximum');
-			return false;
+			return [
+				false,
+				[{ paths, msg: 'input permits greater exclusiveMaximum' }],
+			];
 		}
 	}
 
@@ -521,23 +540,17 @@ function numRulesMatch(
 			!input.hasOwnProperty('minimum') &&
 			!input.hasOwnProperty('exclusiveMinimum')
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input has no minimum property');
-			return false;
+			return [false, [{ paths, msg: 'input has no minimum property' }]];
 		}
 
 		if (input.hasOwnProperty('minimum') && input.minimum < target.minimum) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input permits greater minimum');
-			return false;
+			return [false, [{ paths, msg: 'input permits greater minimum' }]];
 		}
 		if (
 			input.hasOwnProperty('exclusiveMinimum') &&
 			input.exclusiveMinimum < target.minimum
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input permits greater minimum');
-			return false;
+			return [false, [{ paths, msg: 'input permits greater minimum' }]];
 		}
 	}
 
@@ -546,48 +559,45 @@ function numRulesMatch(
 			!input.hasOwnProperty('minimum') &&
 			!input.hasOwnProperty('exclusiveMinimum')
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input has no minimum property');
-			return false;
+			return [false, [{ paths, msg: 'input has no minimum property' }]];
 		}
 
 		if (
 			input.hasOwnProperty('minimum') &&
 			(input.minimum as number) <= (target.exclusiveMinimum as number)
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input permits smaller minimum');
-			return false;
+			return [false, [{ paths, msg: 'input permits smaller minimum' }]];
 		}
 		if (
 			input.hasOwnProperty('exclusiveMinimum') &&
 			(input.exclusiveMinimum as number) < (target.exclusiveMinimum as number)
 		) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input permits greater exclusiveMinimum');
-			return false;
+			return [
+				false,
+				[{ paths, msg: 'input permits greater exclusiveMinimum' }],
+			];
 		}
 	}
 
 	if (target.multipleOf) {
 		if (!input.multipleOf) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'input lacks multipleOf');
-			return false;
+			return [false, [{ paths, msg: 'input lacks multipleOf' }]];
 		}
 		if (input.multipleOf % target.multipleOf !== 0) {
-			// tslint:disable-next-line:no-unused-expression
-
-			log(
-				paths,
-				'input multipleOf is not an integer multiple of target multipleOf'
-			);
-			return false;
+			return [
+				false,
+				[
+					{
+						paths,
+						msg:
+							'input multipleOf is not an integer multiple of target multipleOf',
+					},
+				],
+			];
 		}
 	}
 
-	// log(paths, 'passes number checks');
-	return true;
+	return [true];
 }
 
 function constMatch(
@@ -596,15 +606,20 @@ function constMatch(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
+): ValidatorResult {
 	if (target.const && target.const !== input.const) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, `input const mismatch (${target.const} !== ${input.const})`);
-		return false;
+		return [
+			false,
+			[
+				{
+					paths,
+					msg: `input const mismatch (${target.const} !== ${input.const})`,
+				},
+			],
+		];
 	}
 
-	// log(paths, 'passes const check');
-	return true;
+	return [true];
 }
 
 function allOfMatches(
@@ -613,33 +628,33 @@ function allOfMatches(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
-	if (
-		input.allOf &&
-		!all(input.allOf as JSONSchema[], (e, idx) =>
-			satisfies(e, target, allowPartial, allowAdditionalProps, {
-				input: paths.input.concat(['allOf', idx]),
-				target: paths.target,
-			})
-		)
-	) {
-		return false;
-	}
-
-	if (
-		target.allOf &&
-		!all(target.allOf as JSONSchema[], (e, idx) =>
-			satisfies(input, e, allowPartial, allowAdditionalProps, {
-				input: paths.input,
-				target: paths.target.concat(['allOf', idx]),
-			})
-		)
-	) {
-		return false;
-	}
-
-	// log(paths, 'passes allOf check');
-	return true;
+): ValidatorResult {
+	return checkConditions([
+		[
+			paths,
+			input.allOf,
+			() =>
+				allConds(input.allOf as JSONSchema[], (e, idx) =>
+					satisfies(e, target, allowPartial, allowAdditionalProps, {
+						input: paths.input.concat(['allOf', idx]),
+						target: paths.target,
+					})
+				),
+			'failed allOf check',
+		],
+		[
+			paths,
+			target.allOf,
+			() =>
+				allConds(target.allOf as JSONSchema[], (e, idx) =>
+					satisfies(input, e, allowPartial, allowAdditionalProps, {
+						input: paths.input,
+						target: paths.target.concat(['allOf', idx]),
+					})
+				),
+			'failed allOf check',
+		],
+	]);
 }
 
 function anyOfMatches(
@@ -648,41 +663,40 @@ function anyOfMatches(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
-	// If input can be anyOf [a,b,...], then each of them must be accepted
-	// by the target.
-	if (
-		input.anyOf &&
-		!all(input.anyOf as JSONSchema[], (e, idx) =>
-			satisfies(e, target, allowPartial, allowAdditionalProps, {
-				input: paths.input.concat(['anyOf', idx]),
-				target: paths.target,
-			})
-		)
-	) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'Some input.anyOf elements do not satisfy target');
-		return false;
-	}
-
-	// If the target can accept anyOf [a,b,...], then it's enough
-	// that at least one is satisfied by the input
-	if (
-		target.anyOf &&
-		!some(target.anyOf as JSONSchema[], (e, idx) =>
-			satisfies(input, e, allowPartial, allowAdditionalProps, {
-				input: paths.input,
-				target: paths.target.concat(['anyOf', idx]),
-			})
-		)
-	) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'input does not satisfy any of target.anyOf');
-		return false;
-	}
-
-	// log(paths, 'passes anyOf check');
-	return true;
+): ValidatorResult {
+	return checkConditions([
+		[
+			// If input can be anyOf [a,b,...], then each of them must be accepted
+			// by the target.
+			paths,
+			input.anyOf,
+			() =>
+				allConds(input.anyOf as JSONSchema[], (e, idx) =>
+					satisfies(e, target, allowPartial, allowAdditionalProps, {
+						input: paths.input.concat(['anyOf', idx]),
+						target: paths.target,
+					})
+				),
+			'Some input.anyOf elements do not satisfy target',
+		],
+		[
+			// If the target can accept anyOf [a,b,...], then it's enough
+			// that at least one is satisfied by the input
+			paths,
+			target.anyOf,
+			() =>
+				someConds(
+					target.anyOf as JSONSchema[],
+					(e, idx) =>
+						satisfies(input, e, allowPartial, allowAdditionalProps, {
+							input: paths.input,
+							target: paths.target.concat(['anyOf', idx]),
+						}),
+					paths
+				),
+			'input does not satisfy any of target.anyOf',
+		],
+	]);
 }
 
 function oneOfMatches(
@@ -691,47 +705,36 @@ function oneOfMatches(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
-	if (input.oneOf) {
-		const cond = (e, idx) =>
-			satisfies(e, target, allowPartial, allowAdditionalProps, {
-				input: paths.input.concat(['oneOf', idx]),
-				target: paths.target,
-			});
-		const matching =
-			process.env.NODE_ENV === 'production'
-				? all(input.oneOf as JSONSchema[], cond)
-				: (input.oneOf as JSONSchema[]).filter(cond).length;
-		if (!matching) {
-			// tslint:disable-next-line:no-unused-expression
-			log(
-				paths,
-				matching === false ||
-					(matching as number) < (input.oneOf as JSONSchema[]).length
-					? 'Some input.oneOf elements do not satisfy target'
-					: 'No input.oneOf elements satisfy target'
-			);
-			return false;
-		}
-	}
-
-	if (
-		target.oneOf &&
-		!one(target.oneOf as JSONSchema[], (e, idx) =>
-			satisfies(input, e, allowPartial, allowAdditionalProps, {
-				input: paths.input,
-				target: paths.target.concat(['oneOf', idx]),
-			})
-		)
-	) {
-		// tslint:disable-next-line:no-unused-expression
-
-		log(paths, 'input does not satisfy exactly one of target.oneOf');
-		return false;
-	}
-
-	// log(paths, 'passes oneOf check');
-	return true;
+): ValidatorResult {
+	return checkConditions([
+		[
+			paths,
+			input.oneOf,
+			() =>
+				allConds(input.oneOf as JSONSchema[], (e, idx) =>
+					satisfies(e, target, allowPartial, allowAdditionalProps, {
+						input: paths.input.concat(['oneOf', idx]),
+						target: paths.target,
+					})
+				),
+			'Some input.oneOf elements do not satisfy target',
+		],
+		[
+			paths,
+			target.oneOf,
+			() =>
+				oneCond(
+					target.oneOf as JSONSchema[],
+					(e, idx) =>
+						satisfies(input, e, allowPartial, allowAdditionalProps, {
+							input: paths.input,
+							target: paths.target.concat(['oneOf', idx]),
+						}),
+					paths
+				),
+			'input does not satisfy exactly one of target.oneOf',
+		],
+	]);
 }
 
 function notMatches(
@@ -740,10 +743,9 @@ function notMatches(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
-	if (
-		input.not &&
-		satisfies(
+): ValidatorResult {
+	if (input.not) {
+		const [ok] = satisfies(
 			input.not as JSONSchema,
 			target,
 			allowPartial,
@@ -752,16 +754,14 @@ function notMatches(
 				input: paths.input.concat(['not']),
 				target: paths.target,
 			}
-		)
-	) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'input.not should not satisfy target');
-		return false;
+		);
+		if (ok) {
+			return [false, [{ paths, msg: 'input.not should not satisfy target' }]];
+		}
 	}
 
-	if (
-		target.not &&
-		satisfies(
+	if (target.not) {
+		const [ok] = satisfies(
 			input,
 			target.not as JSONSchema,
 			allowPartial,
@@ -770,24 +770,27 @@ function notMatches(
 				input: paths.input,
 				target: paths.target.concat(['not']),
 			}
-		)
-	) {
-		// tslint:disable-next-line:no-unused-expression
-		log(paths, 'input should not satisfy target.not');
-		return false;
+		);
+		if (ok) {
+			return [false, [{ paths, msg: 'input should not satisfy target.not' }]];
+		}
 	}
 
-	// log(paths, 'passes "not" check');
-	return true;
+	return [true];
 }
 
+type ValidatorErrors = { paths: Paths; msg: string };
+type ValidatorResult =
+	| [true, ValidatorErrors[] | undefined]
+	| [true]
+	| [false, ValidatorErrors[]];
 type Validator = (
 	input: JSONSchema,
 	target: JSONSchema,
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-) => boolean;
+) => ValidatorResult;
 
 function satisfies(
 	input: JSONSchema,
@@ -795,11 +798,11 @@ function satisfies(
 	allowPartial: boolean,
 	allowAdditionalProps: boolean,
 	paths: Paths
-): boolean {
+): ValidatorResult {
 	if (isEqual(input, target)) {
-		return true;
+		return [true];
 	} else if (isEqual(target, {})) {
-		return true;
+		return [true];
 	}
 
 	if (target.anyOf || input.anyOf) {
@@ -847,15 +850,22 @@ function satisfies(
 	}
 
 	for (const validator of validators) {
-		if (!validator(input, target, allowPartial, allowAdditionalProps, paths)) {
-			// tslint:disable-next-line:no-unused-expression
-			log(paths, 'Validator failed:', validator.name);
-			return false;
+		const [ok, errors] = validator(
+			input,
+			target,
+			allowPartial,
+			allowAdditionalProps,
+			paths
+		);
+		if (!ok) {
+			return [
+				false,
+				errors.concat([{ paths, msg: `Validator failed: ${validator.name}` }]),
+			];
 		}
 	}
 
-	// log(paths, 'passes all checks');
-	return true;
+	return [true];
 }
 
 export { JSONSchema };
@@ -891,13 +901,17 @@ export default async function inputSatisfies(
 			target.$schema ? target : { ...target, $schema: defaultSchema }
 		),
 	]);
-	return satisfies(
+	const [ok, errors] = satisfies(
 		clean(mergeAllOf(sub)),
 		clean(mergeAllOf(sup)),
 		allowPartial,
 		allowAdditionalProps,
 		{ input: ['input'], target: ['target'] }
 	);
+	if (!ok) {
+		errors.forEach(({ paths, msg }) => log(paths, msg));
+	}
+	return ok;
 }
 
 function clean(schema: JSONSchema) {
