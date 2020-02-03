@@ -2,6 +2,7 @@
   "ecma": 2017,
   "mangle": true,
   "module": false,
+  "sourceMap": true,
   "compress": {
     "drop_console": true,
     "keep_classnames": false,
