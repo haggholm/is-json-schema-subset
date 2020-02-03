@@ -1,10 +1,18 @@
 {
-  "ecma": 7,
+  "ecma": 2017,
   "mangle": true,
-  "module": true,
+  "module": false,
   "compress": {
     "drop_console": true,
-    "pure_funcs": ["log"]
+    "keep_classnames": false,
+    "keep_fargs": false,
+    "passes": 3,
+    "unsafe_arrows": true,
+    "unsafe_comps": true,
+    "unsafe_methods": true
   },
-  "toplevel": true
+  "toplevel": true,
+  "output": {
+    "semicolons": false
+  }
 }

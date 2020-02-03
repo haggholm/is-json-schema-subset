@@ -1,5 +1,3 @@
-/* tslint:disable:no-console */
-
 import isEqual = require('fast-deep-equal');
 import mergeAllOf = require('json-schema-merge-allof');
 import RefParser = require('json-schema-ref-parser');
@@ -15,6 +13,9 @@ interface Paths {
 	target: Readonly<(string | number)[]>;
 }
 
+const hasProperty: (ob: any, prop: PropertyKey) => boolean = (ob, prop) =>
+	Object.prototype.hasOwnProperty.call(ob, prop);
+
 function formatPathCallback(v: string | number) {
 	return typeof v === 'string' && /^[A-Za-z0-9_$]+$/.test(v)
 		? `.${v}`
@@ -28,11 +29,9 @@ function formatPaths(paths: Paths): string[] {
 	return [formatPath(paths.input), '/', formatPath(paths.target)];
 }
 
-function log(paths: Paths, ...args: any[]) {
-	if (process.env.DEBUG || process.env.NODE_ENV !== 'production') {
-		const indent = Math.max(paths.input.length, paths.target.length);
-		debug(''.padStart(indent, ' '), ...args, 'at', ...formatPaths(paths));
-	}
+function log(paths: Paths, ...args: any[]): void {
+	const indent = Math.max(paths.input.length, paths.target.length);
+	debug(''.padStart(indent, ' '), ...args, 'at', ...formatPaths(paths));
 }
 
 function all<T>(
@@ -59,16 +58,6 @@ function some<T>(
 	return false;
 }
 
-// function multiple<T>(elements: T[], condition: (val: T) => boolean): boolean {
-// 	let matches = 0;
-// 	for (const el of elements) {
-// 		if (condition(el) && ++matches >= 2) {
-// 			return true;
-// 		}
-// 	}
-// 	return false;
-// }
-
 function one<T>(
 	elements: T[],
 	condition: (val: T, idx: number) => boolean
@@ -81,15 +70,6 @@ function one<T>(
 	}
 	return matches === 1;
 }
-
-// function none<T>(elements: T[], condition: (val: T) => boolean): boolean {
-// 	for (const el of elements) {
-// 		if (condition(el)) {
-// 			return false;
-// 		}
-// 	}
-// 	return true;
-// }
 
 function typeMatches(
 	input: JSONSchema,
@@ -121,8 +101,8 @@ function inputHasRequiredProps(
 	paths: Paths
 ): boolean {
 	// Verify that the target doesn't require anything missing from the input
-	const inputRequires = new Set(input.required ?? []);
-	for (const prop of target.required ?? []) {
+	const inputRequires = new Set((input.required ?? []) as string[]);
+	for (const prop of (target.required ?? []) as string[]) {
 		if (!inputRequires.has(prop)) {
 			// tslint:disable-next-line:no-unused-expression
 			log(paths, 'input does not guarantee required property', prop);
@@ -172,7 +152,7 @@ function inputPropertiesMatch(
 	};
 
 	for (const prop of Object.keys(superProps)) {
-		if (!subProps || !Object.prototype.hasOwnProperty.call(subProps, prop)) {
+		if (!subProps || !hasProperty(subProps, prop)) {
 			continue;
 		}
 
@@ -198,24 +178,18 @@ function inputPropertiesMatch(
 	return true;
 }
 
-function calculateEffectiveMinLength(
-	schema: JSONSchema &
-		(
-			| { type: 'string' }
-			| { allOf: JSONSchema[] }
-			| { anyOf: JSONSchema[] }
-			| { oneOf: JSONSchema[] }
-		)
-) {
+function calculateEffectiveMinLength(schema: JSONSchema): number {
 	if (schema.type === 'string') {
 		if (schema.minLength !== undefined) {
 			return schema.minLength;
 		} else if (schema.enum) {
-			return Math.min(...schema.enum.map((s) => s.length));
+			return Math.min(...schema.enum.map((s) => (s as JSONSchema[]).length));
 		}
 	} else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
 		return Math.min(
-			(schema.allOf ?? schema.anyOf ?? schema.oneOf).map((s) =>
+			...((schema.allOf ??
+				schema.anyOf ??
+				schema.oneOf) as JSONSchema[]).map((s) =>
 				calculateEffectiveMinLength(s)
 			)
 		);
@@ -224,24 +198,18 @@ function calculateEffectiveMinLength(
 	}
 }
 
-function calculateEffectiveMaxLength(
-	schema: JSONSchema &
-		(
-			| { type: 'string' }
-			| { allOf: JSONSchema[] }
-			| { anyOf: JSONSchema[] }
-			| { oneOf: JSONSchema[] }
-		)
-) {
+function calculateEffectiveMaxLength(schema: JSONSchema) {
 	if (schema.type === 'string') {
 		if (schema.minLength !== undefined) {
 			return schema.minLength;
 		} else if (schema.enum) {
-			return Math.max(...schema.enum.map((s) => s.length));
+			return Math.max(...schema.enum.map((s) => (s as JSONSchema[]).length));
 		}
 	} else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
 		return Math.max(
-			(schema.allOf ?? schema.anyOf ?? schema.oneOf).map((s) =>
+			...((schema.allOf ??
+				schema.anyOf ??
+				schema.oneOf) as JSONSchema[]).map((s) =>
 				calculateEffectiveMaxLength(s)
 			)
 		);
@@ -250,21 +218,21 @@ function calculateEffectiveMaxLength(
 	}
 }
 
-function gatherEnumValues(s: JSONSchema): string[] | undefined {
-	if (s.type === 'string') {
-		return s.enum;
-	} else if (s.allOf ?? s.anyOf ?? s.oneOf) {
+function gatherEnumValues(schema: JSONSchema): string[] | undefined {
+	if (schema.type === 'string' && schema.enum) {
+		return schema.enum as string[];
+	} else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
 		try {
 			return [].concat(
-				((s.allOf ?? s.anyOf ?? s.oneOf) as JSONSchema[]).map((s) =>
-					gatherEnumValues(s)
-				)
+				((schema.allOf ??
+					schema.anyOf ??
+					schema.oneOf) as JSONSchema[]).map((s) => gatherEnumValues(s))
 			);
 		} catch (err) {
 			return undefined;
 		}
 	} else {
-		throw new Error(`Cannot gather enums from node of type ${s.type}`);
+		throw new Error(`Cannot gather enums from node of type ${schema.type}`);
 	}
 }
 
@@ -318,14 +286,14 @@ function stringRulesMatch(
 	}
 
 	if (
-		target.hasOwnProperty('minLength') &&
+		hasProperty(target, 'minLength') &&
 		calculateEffectiveMinLength(input) < target.minLength
 	) {
 		log(paths, 'input minLength is less than target');
 		return false;
 	}
 	if (
-		target.hasOwnProperty('maxLength') &&
+		hasProperty(target, 'maxLength') &&
 		calculateEffectiveMaxLength(input) > target.maxLength
 	) {
 		// tslint:disable-next-line:no-unused-expression
@@ -333,21 +301,26 @@ function stringRulesMatch(
 		return false;
 	}
 
-	if (target.hasOwnProperty('enum')) {
+	let maybeTargetEnums: Set<string> | undefined;
+	try {
+		maybeTargetEnums = new Set(gatherEnumValues(target));
+	} catch (err) {
+		// no enums
+	}
+	if (maybeTargetEnums) {
 		const inputEnums = gatherEnumValues(input);
 		if (inputEnums === undefined) {
 			// tslint:disable-next-line:no-unused-expression
 			log(paths, 'input is missing enum restrictions');
 			return false;
 		}
-		const enums = new Set(target.enum);
 		for (const e of inputEnums) {
-			if (!enums.has(e)) {
+			if (!maybeTargetEnums.has(e)) {
 				// tslint:disable-next-line:no-unused-expression
 				log(
 					paths,
 					'target',
-					Array.from(enums),
+					Array.from(maybeTargetEnums),
 					'is missing possible input enum:',
 					e
 				);
@@ -372,16 +345,16 @@ function arrayRulesMatch(
 	}
 
 	if (
-		target.hasOwnProperty('minItems') &&
-		(!input.hasOwnProperty('minItems') || input.minItems < target.minItems)
+		hasProperty(target, 'minItems') &&
+		(!hasProperty(input, 'minItems') || input.minItems < target.minItems)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 		log(paths, 'input minItems is less than target');
 		return false;
 	}
 	if (
-		target.hasOwnProperty('maxItems') &&
-		(!input.hasOwnProperty('maxItems') || input.maxItems > target.maxItems)
+		hasProperty(target, 'maxItems') &&
+		(!hasProperty(input, 'maxItems') || input.maxItems > target.maxItems)
 	) {
 		// tslint:disable-next-line:no-unused-expression
 		log(paths, 'input maxItems is more than target');
@@ -389,7 +362,7 @@ function arrayRulesMatch(
 	}
 
 	if (Array.isArray(target.items)) {
-		if (!input.hasOwnProperty('items')) {
+		if (!hasProperty(input, 'items')) {
 			log(paths, 'input is missing items');
 			return false;
 		}
@@ -460,10 +433,10 @@ function numRulesMatch(
 		return true; // nop
 	}
 
-	if (target.hasOwnProperty('maximum')) {
+	if (hasProperty(target, 'maximum')) {
 		if (
-			!input.hasOwnProperty('maximum') &&
-			!input.hasOwnProperty('exclusiveMaximum')
+			!hasProperty(input, 'maximum') &&
+			!hasProperty(input, 'exclusiveMaximum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
 			log(paths, 'input has no maximum property');
@@ -471,7 +444,7 @@ function numRulesMatch(
 		}
 
 		if (
-			input.hasOwnProperty('maximum') &&
+			hasProperty(input, 'maximum') &&
 			(input.maximum as number) > (target.maximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
@@ -479,7 +452,7 @@ function numRulesMatch(
 			return false;
 		}
 		if (
-			input.hasOwnProperty('exclusiveMaximum') &&
+			hasProperty(input, 'exclusiveMaximum') &&
 			(input.exclusiveMaximum as number) > (target.maximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
@@ -488,10 +461,10 @@ function numRulesMatch(
 		}
 	}
 
-	if (target.hasOwnProperty('exclusiveMaximum')) {
+	if (hasProperty(target, 'exclusiveMaximum')) {
 		if (
-			!input.hasOwnProperty('maximum') &&
-			!input.hasOwnProperty('exclusiveMaximum')
+			!hasProperty(input, 'maximum') &&
+			!hasProperty(input, 'exclusiveMaximum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
 			log(paths, 'input has no maximum property');
@@ -499,7 +472,7 @@ function numRulesMatch(
 		}
 
 		if (
-			input.hasOwnProperty('maximum') &&
+			hasProperty(input, 'maximum') &&
 			input.maximum >= target.exclusiveMaximum
 		) {
 			// tslint:disable-next-line:no-unused-expression
@@ -507,7 +480,7 @@ function numRulesMatch(
 			return false;
 		}
 		if (
-			input.hasOwnProperty('exclusiveMaximum') &&
+			hasProperty(input, 'exclusiveMaximum') &&
 			(input.exclusiveMaximum as number) > (target.exclusiveMaximum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
@@ -516,23 +489,23 @@ function numRulesMatch(
 		}
 	}
 
-	if (target.hasOwnProperty('minimum')) {
+	if (hasProperty(target, 'minimum')) {
 		if (
-			!input.hasOwnProperty('minimum') &&
-			!input.hasOwnProperty('exclusiveMinimum')
+			!hasProperty(input, 'minimum') &&
+			!hasProperty(input, 'exclusiveMinimum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
 			log(paths, 'input has no minimum property');
 			return false;
 		}
 
-		if (input.hasOwnProperty('minimum') && input.minimum < target.minimum) {
+		if (hasProperty(input, 'minimum') && input.minimum < target.minimum) {
 			// tslint:disable-next-line:no-unused-expression
 			log(paths, 'input permits greater minimum');
 			return false;
 		}
 		if (
-			input.hasOwnProperty('exclusiveMinimum') &&
+			hasProperty(input, 'exclusiveMinimum') &&
 			input.exclusiveMinimum < target.minimum
 		) {
 			// tslint:disable-next-line:no-unused-expression
@@ -541,10 +514,10 @@ function numRulesMatch(
 		}
 	}
 
-	if (target.hasOwnProperty('exclusiveMinimum')) {
+	if (hasProperty(target, 'exclusiveMinimum')) {
 		if (
-			!input.hasOwnProperty('minimum') &&
-			!input.hasOwnProperty('exclusiveMinimum')
+			!hasProperty(input, 'minimum') &&
+			!hasProperty(input, 'exclusiveMinimum')
 		) {
 			// tslint:disable-next-line:no-unused-expression
 			log(paths, 'input has no minimum property');
@@ -552,7 +525,7 @@ function numRulesMatch(
 		}
 
 		if (
-			input.hasOwnProperty('minimum') &&
+			hasProperty(input, 'minimum') &&
 			(input.minimum as number) <= (target.exclusiveMinimum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
@@ -560,7 +533,7 @@ function numRulesMatch(
 			return false;
 		}
 		if (
-			input.hasOwnProperty('exclusiveMinimum') &&
+			hasProperty(input, 'exclusiveMinimum') &&
 			(input.exclusiveMinimum as number) < (target.exclusiveMinimum as number)
 		) {
 			// tslint:disable-next-line:no-unused-expression
