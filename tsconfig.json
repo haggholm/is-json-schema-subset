@@ -14,5 +14,5 @@
     "target": "es2018",
     "composite": true
   },
-  "exclude": ["dist/**  ", "test/**"]
+  "exclude": ["dist/**", "test/**"]
 }

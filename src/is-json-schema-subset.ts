@@ -4,6 +4,7 @@ import RefParser = require('@apidevtools/json-schema-ref-parser');
 import { JSONSchema } from '@apidevtools/json-schema-ref-parser';
 import mkDebug = require('debug');
 import AJV = require('ajv');
+import { Ajv } from 'ajv';
 
 const debug = mkDebug('is-json-schema-subset');
 
@@ -75,8 +76,7 @@ function one<T>(
 function typeMatches(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   if (isEqual(target, {})) {
@@ -97,8 +97,7 @@ function typeMatches(
 function inputHasRequiredProps(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   // Verify that the target doesn't require anything missing from the input
@@ -118,8 +117,7 @@ function inputHasRequiredProps(
 function inputHasNoExtraneousProps(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   // Verify that the input doesn't have extra properties violating the target
@@ -141,8 +139,7 @@ function inputHasNoExtraneousProps(
 function inputPropertiesMatch(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   const subProps = (input.properties ?? {}) as {
@@ -158,16 +155,10 @@ function inputPropertiesMatch(
     }
 
     if (
-      !satisfies(
-        subProps[prop],
-        superProps[prop],
-        allowPartial,
-        allowAdditionalProps,
-        {
-          input: paths.input.concat([prop]),
-          target: paths.target.concat([prop]),
-        }
-      )
+      !satisfies(subProps[prop], superProps[prop], options, {
+        input: paths.input.concat([prop]),
+        target: paths.target.concat([prop]),
+      })
     ) {
       // tslint:disable-next-line:no-unused-expression
       log(paths, 'Property', prop, 'does not match');
@@ -240,8 +231,7 @@ function gatherEnumValues(schema: JSONSchema): string[] | undefined {
 function stringRulesMatch(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   if (target.type !== 'string') {
@@ -251,10 +241,9 @@ function stringRulesMatch(
   if (target.format && target.format !== input.format) {
     let compatible;
     if (input.enum) {
-      const ajv = new AJV();
       compatible = all(
         input.enum,
-        (s: string) => ajv.validate(target, s) as boolean
+        (s: string) => options.ajv.validate(target, s) as boolean
       );
     } else {
       switch (target.format) {
@@ -345,8 +334,7 @@ function stringRulesMatch(
 function arrayRulesMatch(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   if (target.type !== 'array') {
@@ -389,8 +377,7 @@ function arrayRulesMatch(
         !satisfies(
           input.items[i] as JSONSchema,
           target.items[i] as JSONSchema,
-          allowPartial,
-          allowAdditionalProps,
+          options,
           {
             input: paths.input.concat([i]),
             target: paths.target.concat([i]),
@@ -407,8 +394,7 @@ function arrayRulesMatch(
       !satisfies(
         input.items as JSONSchema,
         target.items as JSONSchema,
-        allowPartial,
-        allowAdditionalProps,
+        options,
         {
           input: paths.input.concat(['items']),
           target: paths.target.concat(['items']),
@@ -434,8 +420,7 @@ function arrayRulesMatch(
 function numRulesMatch(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   if (target.type !== 'integer' && target.type !== 'number') {
@@ -575,8 +560,7 @@ function numRulesMatch(
 function constMatch(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   if (target.const && target.const !== input.const) {
@@ -592,14 +576,13 @@ function constMatch(
 function allOfMatches(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   if (
     input.allOf &&
     !all(input.allOf as JSONSchema[], (e, idx) =>
-      satisfies(e, target, allowPartial, allowAdditionalProps, {
+      satisfies(e, target, options, {
         input: paths.input.concat(['allOf', idx]),
         target: paths.target,
       })
@@ -611,7 +594,7 @@ function allOfMatches(
   if (
     target.allOf &&
     !all(target.allOf as JSONSchema[], (e, idx) =>
-      satisfies(input, e, allowPartial, allowAdditionalProps, {
+      satisfies(input, e, options, {
         input: paths.input,
         target: paths.target.concat(['allOf', idx]),
       })
@@ -627,8 +610,7 @@ function allOfMatches(
 function anyOfMatches(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   // If input can be anyOf [a,b,...], then each of them must be accepted
@@ -636,7 +618,7 @@ function anyOfMatches(
   if (
     input.anyOf &&
     !all(input.anyOf as JSONSchema[], (e, idx) =>
-      satisfies(e, target, allowPartial, allowAdditionalProps, {
+      satisfies(e, target, options, {
         input: paths.input.concat(['anyOf', idx]),
         target: paths.target,
       })
@@ -652,7 +634,7 @@ function anyOfMatches(
   if (
     target.anyOf &&
     !some(target.anyOf as JSONSchema[], (e, idx) =>
-      satisfies(input, e, allowPartial, allowAdditionalProps, {
+      satisfies(input, e, options, {
         input: paths.input,
         target: paths.target.concat(['anyOf', idx]),
       })
@@ -670,13 +652,12 @@ function anyOfMatches(
 function oneOfMatches(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   if (input.oneOf) {
     const cond = (e, idx) =>
-      satisfies(e, target, allowPartial, allowAdditionalProps, {
+      satisfies(e, target, options, {
         input: paths.input.concat(['oneOf', idx]),
         target: paths.target,
       });
@@ -700,7 +681,7 @@ function oneOfMatches(
   if (
     target.oneOf &&
     !one(target.oneOf as JSONSchema[], (e, idx) =>
-      satisfies(input, e, allowPartial, allowAdditionalProps, {
+      satisfies(input, e, options, {
         input: paths.input,
         target: paths.target.concat(['oneOf', idx]),
       })
@@ -719,22 +700,15 @@ function oneOfMatches(
 function notMatches(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   if (
     input.not &&
-    satisfies(
-      input.not as JSONSchema,
-      target,
-      allowPartial,
-      allowAdditionalProps,
-      {
-        input: paths.input.concat(['not']),
-        target: paths.target,
-      }
-    )
+    satisfies(input.not as JSONSchema, target, options, {
+      input: paths.input.concat(['not']),
+      target: paths.target,
+    })
   ) {
     // tslint:disable-next-line:no-unused-expression
     log(paths, 'input.not should not satisfy target');
@@ -743,16 +717,10 @@ function notMatches(
 
   if (
     target.not &&
-    satisfies(
-      input,
-      target.not as JSONSchema,
-      allowPartial,
-      allowAdditionalProps,
-      {
-        input: paths.input,
-        target: paths.target.concat(['not']),
-      }
-    )
+    satisfies(input, target.not as JSONSchema, options, {
+      input: paths.input,
+      target: paths.target.concat(['not']),
+    })
   ) {
     // tslint:disable-next-line:no-unused-expression
     log(paths, 'input should not satisfy target.not');
@@ -766,16 +734,14 @@ function notMatches(
 type Validator = (
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ) => boolean;
 
 function satisfies(
   input: JSONSchema,
   target: JSONSchema,
-  allowPartial: boolean,
-  allowAdditionalProps: boolean,
+  options: Options,
   paths: Paths
 ): boolean {
   if (isEqual(input, target)) {
@@ -785,29 +751,11 @@ function satisfies(
   }
 
   if (target.anyOf || input.anyOf) {
-    return anyOfMatches(
-      input,
-      target,
-      allowPartial,
-      allowAdditionalProps,
-      paths
-    );
+    return anyOfMatches(input, target, options, paths);
   } else if (target.allOf || input.allOf) {
-    return allOfMatches(
-      input,
-      target,
-      allowPartial,
-      allowAdditionalProps,
-      paths
-    );
+    return allOfMatches(input, target, options, paths);
   } else if (target.oneOf || input.oneOf) {
-    return oneOfMatches(
-      input,
-      target,
-      allowPartial,
-      allowAdditionalProps,
-      paths
-    );
+    return oneOfMatches(input, target, options, paths);
   }
 
   const validators: Validator[] = [
@@ -824,12 +772,12 @@ function satisfies(
     oneOfMatches,
     notMatches,
   ];
-  if (!allowAdditionalProps) {
+  if (!options.allowAdditionalProps) {
     validators.push(inputHasNoExtraneousProps);
   }
 
   for (const validator of validators) {
-    if (!validator(input, target, allowPartial, allowAdditionalProps, paths)) {
+    if (!validator(input, target, options, paths)) {
       // tslint:disable-next-line:no-unused-expression
       log(paths, 'Validator failed:', validator.name);
       return false;
@@ -840,22 +788,30 @@ function satisfies(
   return true;
 }
 
+interface Options {
+  allowPartial: boolean;
+  allowAdditionalProps: boolean;
+  ajv: Ajv;
+}
+
 export { JSONSchema };
 export default async function inputSatisfies(
   input: JSONSchema,
   target: JSONSchema,
-  opts:
-    | boolean
-    | { allowPartial?: boolean; allowAdditionalProps?: boolean } = false
+  options: boolean | Partial<Options> = false
 ): Promise<boolean> {
-  let allowPartial = false;
-  let allowAdditionalProps = false;
-  if (typeof opts === 'boolean') {
-    allowPartial = opts;
-  } else if (typeof opts === 'object' && opts !== null) {
-    allowPartial = opts.allowPartial;
-    allowAdditionalProps = opts.allowAdditionalProps;
-  }
+  const processedOpts: Options =
+    typeof options === 'boolean'
+      ? {
+          allowPartial: options,
+          allowAdditionalProps: false,
+          ajv: new AJV(),
+        }
+      : {
+          allowPartial: options.allowPartial || false,
+          allowAdditionalProps: options.allowAdditionalProps || false,
+          ajv: options.ajv ?? new AJV(),
+        };
 
   const draftRegex = /draft-0[1234]\/schema/;
   if (
@@ -876,8 +832,7 @@ export default async function inputSatisfies(
   return satisfies(
     clean(mergeAllOf(sub)),
     clean(mergeAllOf(sup)),
-    allowPartial,
-    allowAdditionalProps,
+    processedOpts,
     { input: ['input'], target: ['target'] }
   );
 }
