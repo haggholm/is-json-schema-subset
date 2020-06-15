@@ -1,8 +1,9 @@
 import isEqual = require('fast-deep-equal');
 import mergeAllOf = require('json-schema-merge-allof');
-import RefParser = require('json-schema-ref-parser');
-import { JSONSchema } from 'json-schema-ref-parser';
+import RefParser = require('@apidevtools/json-schema-ref-parser');
+import { JSONSchema } from '@apidevtools/json-schema-ref-parser';
 import mkDebug = require('debug');
+import AJV = require('ajv');
 
 const debug = mkDebug('is-json-schema-subset');
 
@@ -249,28 +250,36 @@ function stringRulesMatch(
 
   if (target.format && target.format !== input.format) {
     let compatible;
-    switch (target.format) {
-      case 'idn-email':
-        compatible = input.format === 'email';
-        break;
-      case 'idn-hostname':
-        compatible = input.format === 'hostname';
-        break;
-      case 'iri':
-        compatible = input.format === 'uri' || input.format === 'iri';
-        break;
-      case 'iri-reference':
-        compatible =
-          input.format === 'uri' ||
-          input.format === 'uri-reference' ||
-          input.format === 'iri';
-        break;
-      case 'uri-reference':
-        compatible = input.format === 'uri';
-        break;
-      default:
-        compatible = false;
-        break;
+    if (input.enum) {
+      const ajv = new AJV();
+      compatible = all(
+        input.enum,
+        (s: string) => ajv.validate(target, s) as boolean
+      );
+    } else {
+      switch (target.format) {
+        case 'idn-email':
+          compatible = input.format === 'email';
+          break;
+        case 'idn-hostname':
+          compatible = input.format === 'hostname';
+          break;
+        case 'iri':
+          compatible = input.format === 'uri' || input.format === 'iri';
+          break;
+        case 'iri-reference':
+          compatible =
+            input.format === 'uri' ||
+            input.format === 'uri-reference' ||
+            input.format === 'iri';
+          break;
+        case 'uri-reference':
+          compatible = input.format === 'uri';
+          break;
+        default:
+          compatible = false;
+          break;
+      }
     }
     if (!compatible) {
       // tslint:disable-next-line:no-unused-expression
