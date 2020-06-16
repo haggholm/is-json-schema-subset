@@ -1,10 +1,11 @@
 import isEqual = require('fast-deep-equal');
 import mergeAllOf = require('json-schema-merge-allof');
 import RefParser = require('@apidevtools/json-schema-ref-parser');
-import { JSONSchema } from '@apidevtools/json-schema-ref-parser';
+import type { JSONSchema as RefParserSchemaType } from '@apidevtools/json-schema-ref-parser';
+import type { JSONSchema7 } from 'json-schema';
 import mkDebug = require('debug');
 import AJV = require('ajv');
-import { Ajv } from 'ajv';
+import type { Ajv } from 'ajv';
 
 const debug = mkDebug('is-json-schema-subset');
 
@@ -74,8 +75,8 @@ function one<T>(
 }
 
 function typeMatches(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -95,8 +96,8 @@ function typeMatches(
 }
 
 function inputHasRequiredProps(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -115,8 +116,8 @@ function inputHasRequiredProps(
 }
 
 function inputHasNoExtraneousProps(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -137,16 +138,16 @@ function inputHasNoExtraneousProps(
 }
 
 function inputPropertiesMatch(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
   const subProps = (input.properties ?? {}) as {
-    [k: string]: JSONSchema;
+    [k: string]: JSONSchema7;
   };
   const superProps = (target.properties ?? {}) as {
-    [k: string]: JSONSchema;
+    [k: string]: JSONSchema7;
   };
 
   for (const prop of Object.keys(superProps)) {
@@ -170,18 +171,18 @@ function inputPropertiesMatch(
   return true;
 }
 
-function calculateEffectiveMinLength(schema: JSONSchema): number {
+function calculateEffectiveMinLength(schema: JSONSchema7): number {
   if (schema.type === 'string') {
     if (schema.minLength !== undefined) {
       return schema.minLength;
     } else if (schema.enum) {
-      return Math.min(...schema.enum.map((s) => (s as JSONSchema[]).length));
+      return Math.min(...schema.enum.map((s) => (s as JSONSchema7[]).length));
     }
   } else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
     return Math.min(
       ...((schema.allOf ??
         schema.anyOf ??
-        schema.oneOf) as JSONSchema[]).map((s) =>
+        schema.oneOf) as JSONSchema7[]).map((s) =>
         calculateEffectiveMinLength(s)
       )
     );
@@ -190,18 +191,18 @@ function calculateEffectiveMinLength(schema: JSONSchema): number {
   }
 }
 
-function calculateEffectiveMaxLength(schema: JSONSchema) {
+function calculateEffectiveMaxLength(schema: JSONSchema7) {
   if (schema.type === 'string') {
     if (schema.minLength !== undefined) {
       return schema.minLength;
     } else if (schema.enum) {
-      return Math.max(...schema.enum.map((s) => (s as JSONSchema[]).length));
+      return Math.max(...schema.enum.map((s) => (s as JSONSchema7[]).length));
     }
   } else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
     return Math.max(
       ...((schema.allOf ??
         schema.anyOf ??
-        schema.oneOf) as JSONSchema[]).map((s) =>
+        schema.oneOf) as JSONSchema7[]).map((s) =>
         calculateEffectiveMaxLength(s)
       )
     );
@@ -210,7 +211,7 @@ function calculateEffectiveMaxLength(schema: JSONSchema) {
   }
 }
 
-function gatherEnumValues(schema: JSONSchema): string[] | undefined {
+function gatherEnumValues(schema: JSONSchema7): string[] | undefined {
   if (schema.type === 'string' && schema.enum) {
     return schema.enum as string[];
   } else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
@@ -218,7 +219,7 @@ function gatherEnumValues(schema: JSONSchema): string[] | undefined {
       return [].concat(
         ((schema.allOf ??
           schema.anyOf ??
-          schema.oneOf) as JSONSchema[]).map((s) => gatherEnumValues(s))
+          schema.oneOf) as JSONSchema7[]).map((s) => gatherEnumValues(s))
       );
     } catch (err) {
       return undefined;
@@ -229,8 +230,8 @@ function gatherEnumValues(schema: JSONSchema): string[] | undefined {
 }
 
 function stringRulesMatch(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -332,8 +333,8 @@ function stringRulesMatch(
 }
 
 function arrayRulesMatch(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -375,8 +376,8 @@ function arrayRulesMatch(
     for (let i = 0, len = target.items.length; i < len; i++) {
       if (
         !satisfies(
-          input.items[i] as JSONSchema,
-          target.items[i] as JSONSchema,
+          input.items[i] as JSONSchema7,
+          target.items[i] as JSONSchema7,
           options,
           {
             input: paths.input.concat([i]),
@@ -392,8 +393,8 @@ function arrayRulesMatch(
   } else {
     if (
       !satisfies(
-        input.items as JSONSchema,
-        target.items as JSONSchema,
+        input.items as JSONSchema7,
+        target.items as JSONSchema7,
         options,
         {
           input: paths.input.concat(['items']),
@@ -418,8 +419,8 @@ function arrayRulesMatch(
 }
 
 function numRulesMatch(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -558,8 +559,8 @@ function numRulesMatch(
 }
 
 function constMatch(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -574,14 +575,14 @@ function constMatch(
 }
 
 function allOfMatches(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
   if (
     input.allOf &&
-    !all(input.allOf as JSONSchema[], (e, idx) =>
+    !all(input.allOf as JSONSchema7[], (e, idx) =>
       satisfies(e, target, options, {
         input: paths.input.concat(['allOf', idx]),
         target: paths.target,
@@ -593,7 +594,7 @@ function allOfMatches(
 
   if (
     target.allOf &&
-    !all(target.allOf as JSONSchema[], (e, idx) =>
+    !all(target.allOf as JSONSchema7[], (e, idx) =>
       satisfies(input, e, options, {
         input: paths.input,
         target: paths.target.concat(['allOf', idx]),
@@ -608,8 +609,8 @@ function allOfMatches(
 }
 
 function anyOfMatches(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -617,7 +618,7 @@ function anyOfMatches(
   // by the target.
   if (
     input.anyOf &&
-    !all(input.anyOf as JSONSchema[], (e, idx) =>
+    !all(input.anyOf as JSONSchema7[], (e, idx) =>
       satisfies(e, target, options, {
         input: paths.input.concat(['anyOf', idx]),
         target: paths.target,
@@ -633,7 +634,7 @@ function anyOfMatches(
   // that at least one is satisfied by the input
   if (
     target.anyOf &&
-    !some(target.anyOf as JSONSchema[], (e, idx) =>
+    !some(target.anyOf as JSONSchema7[], (e, idx) =>
       satisfies(input, e, options, {
         input: paths.input,
         target: paths.target.concat(['anyOf', idx]),
@@ -650,8 +651,8 @@ function anyOfMatches(
 }
 
 function oneOfMatches(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -663,14 +664,14 @@ function oneOfMatches(
       });
     const matching =
       process.env.NODE_ENV === 'production'
-        ? all(input.oneOf as JSONSchema[], cond)
-        : (input.oneOf as JSONSchema[]).filter(cond).length;
+        ? all(input.oneOf as JSONSchema7[], cond)
+        : (input.oneOf as JSONSchema7[]).filter(cond).length;
     if (!matching) {
       // tslint:disable-next-line:no-unused-expression
       log(
         paths,
         matching === false ||
-          (matching as number) < (input.oneOf as JSONSchema[]).length
+          (matching as number) < (input.oneOf as JSONSchema7[]).length
           ? 'Some input.oneOf elements do not satisfy target'
           : 'No input.oneOf elements satisfy target'
       );
@@ -680,7 +681,7 @@ function oneOfMatches(
 
   if (
     target.oneOf &&
-    !one(target.oneOf as JSONSchema[], (e, idx) =>
+    !one(target.oneOf as JSONSchema7[], (e, idx) =>
       satisfies(input, e, options, {
         input: paths.input,
         target: paths.target.concat(['oneOf', idx]),
@@ -698,14 +699,14 @@ function oneOfMatches(
 }
 
 function notMatches(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
   if (
     input.not &&
-    satisfies(input.not as JSONSchema, target, options, {
+    satisfies(input.not as JSONSchema7, target, options, {
       input: paths.input.concat(['not']),
       target: paths.target,
     })
@@ -717,7 +718,7 @@ function notMatches(
 
   if (
     target.not &&
-    satisfies(input, target.not as JSONSchema, options, {
+    satisfies(input, target.not as JSONSchema7, options, {
       input: paths.input,
       target: paths.target.concat(['not']),
     })
@@ -732,15 +733,15 @@ function notMatches(
 }
 
 type Validator = (
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ) => boolean;
 
 function satisfies(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: Options,
   paths: Paths
 ): boolean {
@@ -794,10 +795,10 @@ interface Options {
   ajv: Ajv;
 }
 
-export { JSONSchema };
+export type { JSONSchema7 };
 export default async function inputSatisfies(
-  input: JSONSchema,
-  target: JSONSchema,
+  input: JSONSchema7,
+  target: JSONSchema7,
   options: boolean | Partial<Options> = false
 ): Promise<boolean> {
   const processedOpts: Options =
@@ -821,14 +822,18 @@ export default async function inputSatisfies(
     throw new Error('Requires JSON schema draft version 5+');
   }
 
-  const [sub, sup] = await Promise.all([
+  const [sub, sup] = (await Promise.all([
     RefParser.dereference(
-      input.$schema ? input : { ...input, $schema: defaultSchema }
+      (input.$schema
+        ? input
+        : { ...input, $schema: defaultSchema }) as RefParserSchemaType
     ),
     RefParser.dereference(
-      target.$schema ? target : { ...target, $schema: defaultSchema }
+      (target.$schema
+        ? target
+        : { ...target, $schema: defaultSchema }) as RefParserSchemaType
     ),
-  ]);
+  ])) as [JSONSchema7, JSONSchema7];
   return satisfies(
     clean(mergeAllOf(sub)),
     clean(mergeAllOf(sup)),
@@ -837,7 +842,7 @@ export default async function inputSatisfies(
   );
 }
 
-function clean(schema: JSONSchema) {
+function clean(schema: JSONSchema7) {
   if (typeof schema !== 'object' || schema === null) {
     return schema;
   }

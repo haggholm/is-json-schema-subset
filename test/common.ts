@@ -2,7 +2,7 @@
 
 import AJV = require('ajv');
 import jsf = require('json-schema-faker');
-import { JSONSchema } from '@apidevtools/json-schema-ref-parser';
+import { JSONSchema7 } from 'json-schema';
 
 import satisfies from '../src/is-json-schema-subset';
 
@@ -11,10 +11,10 @@ const RANDOM_SAMPLES = 100;
 const ajv = new AJV({ allErrors: true });
 jsf.option('optionalsProbability', 0.5);
 
-export { JSONSchema, jsf, ajv, RANDOM_SAMPLES, satisfies };
+export { JSONSchema7, jsf, ajv, RANDOM_SAMPLES, satisfies };
 
 expect.extend({
-  toSatisfy: async (subset: JSONSchema, superset: JSONSchema) => {
+  toSatisfy: async (subset: JSONSchema7, superset: JSONSchema7) => {
     const [subInconsistent, supInconsistent, pass] = await Promise.all([
       satisfies(subset, subset),
       satisfies(superset, superset),
@@ -63,7 +63,7 @@ expect.extend({
         )}`,
     };
   },
-  toViolate: async (subset: JSONSchema, superset: JSONSchema) => {
+  toViolate: async (subset: JSONSchema7, superset: JSONSchema7) => {
     const [subInconsistent, supInconsistent, pass] = await Promise.all([
       satisfies(subset, subset),
       satisfies(superset, superset),
