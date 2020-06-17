@@ -105,9 +105,15 @@ function inputHasRequiredProps(
   const inputRequires = new Set((input.required ?? []) as string[]);
   for (const prop of (target.required ?? []) as string[]) {
     if (!inputRequires.has(prop)) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input does not guarantee required property', prop);
-      return false;
+      const hasDefault = Object.prototype.hasOwnProperty.call(
+        target.properties![prop],
+        'default'
+      );
+      if (!hasDefault) {
+        // tslint:disable-next-line:no-unused-expression
+        log(paths, 'input does not guarantee required property', prop);
+        return false;
+      }
     }
   }
 
@@ -211,21 +217,20 @@ function calculateEffectiveMaxLength(schema: JSONSchema7) {
   }
 }
 
-function gatherEnumValues(schema: JSONSchema7): string[] | undefined {
-  if (schema.type === 'string' && schema.enum) {
-    return schema.enum as string[];
-  } else if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
-    try {
-      return [].concat(
-        ((schema.allOf ??
-          schema.anyOf ??
-          schema.oneOf) as JSONSchema7[]).map((s) => gatherEnumValues(s))
-      );
-    } catch (err) {
-      return undefined;
+function gatherEnumValues(schema: JSONSchema7): any[] | undefined {
+  if (schema.allOf ?? schema.anyOf ?? schema.oneOf) {
+    let enums;
+    for (const e of (schema.allOf ??
+      schema.anyOf ??
+      schema.oneOf) as JSONSchema7[]) {
+      const subEnums = gatherEnumValues(e);
+      if (subEnums) {
+        enums = (enums ?? []).concat(subEnums);
+      }
     }
+    return enums;
   } else {
-    throw new Error(`Cannot gather enums from node of type ${schema.type}`);
+    return schema.enum ?? undefined;
   }
 }
 
@@ -300,13 +305,8 @@ function stringRulesMatch(
     return false;
   }
 
-  let maybeTargetEnums: Set<string> | undefined;
-  try {
-    maybeTargetEnums = new Set(gatherEnumValues(target));
-  } catch (err) {
-    // no enums
-  }
-  if (maybeTargetEnums) {
+  const maybeTargetEnums = new Set(gatherEnumValues(target));
+  if (maybeTargetEnums.size) {
     const inputEnums = gatherEnumValues(input);
     if (inputEnums === undefined) {
       // tslint:disable-next-line:no-unused-expression

@@ -9,4 +9,15 @@ module.exports = {
     '!dist/**',
     '!coverage/**',
   ],
+  // coveragePathIgnorePatterns: [
+  //   '<rootDir>/src/foo.ts',
+  // ],
+  coverageThreshold: {
+    global: {
+      statements: 64,
+      branches: 57,
+      functions: 68,
+      lines: 64,
+    },
+  },
 };
