@@ -1,6 +1,6 @@
 {
   "name": "is-json-schema-subset",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "Check if a JSON schema is a subset of another",
   "keywords": [
     "JSON schema",
