@@ -242,7 +242,7 @@ test('accept anyOf: multiple matches', () =>
   }));
 
 describe('required properties', () => {
-  it('should accept guaranteed required properties', () => {
+  it('should accept guaranteed required properties', () =>
     expect({
       type: 'object',
       required: ['foo'],
@@ -257,10 +257,9 @@ describe('required properties', () => {
         foo: {},
         bar: { type: 'string' },
       },
-    });
-  });
+    }));
 
-  it('should reject non-guaranteed required properties', () => {
+  it('should reject non-guaranteed required properties', () =>
     expect({
       type: 'object',
       properties: {
@@ -274,10 +273,9 @@ describe('required properties', () => {
         foo: { type: 'string' },
         bar: { type: 'string' },
       },
-    });
-  });
+    }));
 
-  it('should accept non-guaranteed required properties with defaults', () => {
+  it('should accept non-guaranteed required properties with defaults', () =>
     expect({
       type: 'object',
       properties: {
@@ -291,6 +289,57 @@ describe('required properties', () => {
         foo: { type: 'string' },
         bar: { type: 'string' },
       },
-    });
-  });
+    }));
 });
+
+test('Empirical problem cases', () =>
+  expect({
+    properties: {
+      emails: {
+        items: {
+          properties: {
+            type: {
+              enum: ['other', 'personal', 'work'],
+              type: 'string',
+            },
+            value: {
+              format: 'email',
+              minLength: 6,
+              type: 'string',
+            },
+          },
+          required: ['type', 'value'],
+          title: 'Email',
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    required: ['emails'],
+    type: 'object',
+    // @ts-ignore
+  }).toSatisfy({
+    type: 'object',
+    required: ['emails'],
+    properties: {
+      emails: {
+        items: {
+          properties: {
+            type: {
+              enum: ['other', 'personal', 'work'],
+              type: 'string',
+            },
+            value: {
+              format: 'email',
+              minLength: 6,
+              type: 'string',
+            },
+          },
+          required: ['type', 'value'],
+          title: 'Email',
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+  }));

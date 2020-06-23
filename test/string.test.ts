@@ -2,8 +2,8 @@
 
 import './common';
 
-test(`string format compatibility`, () => {
-  expect({
+test(`string format compatibility`, async () => {
+  await expect({
     type: 'string',
     format: 'uri',
     // @ts-ignore
@@ -11,7 +11,7 @@ test(`string format compatibility`, () => {
     type: 'string',
     format: 'uri-reference',
   });
-  expect({
+  await expect({
     type: 'string',
     format: 'uri-reference',
     // @ts-ignore
@@ -21,8 +21,8 @@ test(`string format compatibility`, () => {
   });
 });
 
-test(`string format/enum compatibility`, () => {
-  expect({
+test(`string format/enum compatibility`, async () => {
+  await expect({
     type: 'string',
     enum: ['https://www.google.com', 'https://owl.co'],
     // @ts-ignore
@@ -30,7 +30,7 @@ test(`string format/enum compatibility`, () => {
     type: 'string',
     format: 'uri',
   });
-  expect({
+  await expect({
     type: 'string',
     enum: ['vainglory'],
     // @ts-ignore

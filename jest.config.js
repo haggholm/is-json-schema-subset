@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'ts-jest',
+  verbose: false,
   testEnvironment: 'node',
   collectCoverage: true,
   collectCoverageFrom: [
@@ -14,8 +15,8 @@ module.exports = {
   // ],
   coverageThreshold: {
     global: {
-      statements: 64,
-      branches: 57,
+      statements: 63,
+      branches: 55,
       functions: 68,
       lines: 64,
     },

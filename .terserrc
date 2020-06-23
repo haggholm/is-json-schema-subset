@@ -2,10 +2,13 @@
   "ecma": 2017,
   "mangle": true,
   "module": false,
-  "sourceMap": true,
+  "sourceMap": {
+    "url": "inline"
+  },
   "compress": {
     "drop_console": true,
     "keep_classnames": false,
+    "keep_fnames": false,
     "keep_fargs": false,
     "passes": 3,
     "unsafe_arrows": true,

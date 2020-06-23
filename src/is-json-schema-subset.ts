@@ -16,8 +16,10 @@ interface Paths {
   target: Readonly<(string | number)[]>;
 }
 
-const hasProperty: (ob: any, prop: PropertyKey) => boolean = (ob, prop) =>
-  Object.prototype.hasOwnProperty.call(ob, prop);
+const hasProperty: (ob: any, prop: PropertyKey) => ErrorArray | undefined = (
+  ob,
+  prop
+) => Object.prototype.hasOwnProperty.call(ob, prop);
 
 function formatPathCallback(v: string | number) {
   return typeof v === 'string' && /^[A-Za-z0-9_$]+$/.test(v)
@@ -32,12 +34,33 @@ function formatPaths(paths: Paths): string[] {
   return [formatPath(paths.input), '/', formatPath(paths.target)];
 }
 
-function log(paths: Paths, ...args: any[]): void {
+export interface SchemaCompatError {
+  paths: Paths;
+  args: any[];
+}
+
+type ErrorArray = [SchemaCompatError, ...SchemaCompatError[]];
+
+function log(paths, ...args: any[]): void {
   const indent = Math.max(paths.input.length, paths.target.length);
   debug(''.padStart(indent, ' '), ...args, 'at', ...formatPaths(paths));
 }
 
 function all<T>(
+  elements: T[],
+  condition: (val: T, idx: number) => ErrorArray | undefined
+): ErrorArray | undefined {
+  // Reverse for legible error message ordering
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const errors = condition(elements[i], i);
+    if (errors?.length) {
+      return errors as ErrorArray;
+    }
+  }
+  return undefined;
+}
+
+function allBool<T>(
   elements: T[],
   condition: (val: T, idx: number) => boolean
 ): boolean {
@@ -51,37 +74,57 @@ function all<T>(
 
 function some<T>(
   elements: T[],
-  condition: (val: T, idx: number) => boolean
-): boolean {
-  for (let i = 0, len = elements.length; i < len; i++) {
-    if (condition(elements[i], i)) {
-      return true;
+  condition: (val: T, idx: number) => ErrorArray | undefined
+): ErrorArray | undefined {
+  const allErrors = [];
+  // Reverse for legible error message ordering
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const errors = condition(elements[i], i);
+    if (errors?.length) {
+      allErrors.push(...errors);
+    } else {
+      return;
     }
   }
-  return false;
+  return allErrors.length ? (allErrors as ErrorArray) : undefined;
 }
 
 function one<T>(
+  paths,
   elements: T[],
-  condition: (val: T, idx: number) => boolean
-): boolean {
+  condition: (val: T, idx: number) => ErrorArray | undefined
+): ErrorArray | undefined {
+  const allErrors = [];
   let matches = 0;
-  for (let i = 0, len = elements.length; i < len; i++) {
-    if (condition(elements[i], i) && ++matches >= 2) {
-      return false;
+  // Reverse for legible error message ordering
+  for (let i = elements.length - 1; i >= 0; i--) {
+    const errors = condition(elements[i], i);
+    if (errors?.length) {
+      matches++;
+      allErrors.push(...errors);
     }
   }
-  return matches === 1;
+
+  if (matches === 1) {
+    return;
+  } else if (matches > 1) {
+    return [{ paths, args: ['oneOf matches more than one branch'] }];
+  } else {
+    return [
+      ...allErrors,
+      { paths, args: ['oneOf does not match any branches'] },
+    ] as ErrorArray;
+  }
 }
 
-function typeMatches(
+function getTypeMatchErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   if (isEqual(target, {})) {
-    return true;
+    return;
   }
 
   const match =
@@ -89,18 +132,21 @@ function typeMatches(
     (target.type === 'number' && input.type === 'integer');
 
   if (!match) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, `Type mismatch: ${input.type} does not satisfy ${target.type}`);
+    return [
+      {
+        paths,
+        args: [`Type mismatch: ${input.type} does not satisfy ${target.type}`],
+      },
+    ];
   }
-  return match;
 }
 
-function inputHasRequiredProps(
+function getRequiredInputErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   // Verify that the target doesn't require anything missing from the input
   const inputRequires = new Set((input.required ?? []) as string[]);
   for (const prop of (target.required ?? []) as string[]) {
@@ -110,45 +156,45 @@ function inputHasRequiredProps(
         'default'
       );
       if (!hasDefault) {
-        // tslint:disable-next-line:no-unused-expression
-        log(paths, 'input does not guarantee required property', prop);
-        return false;
+        return [
+          {
+            paths,
+            args: ['input does not guarantee required property', prop],
+          },
+        ];
       }
     }
   }
-
-  // log(paths, 'passes required properties check');
-  return true;
 }
 
-function inputHasNoExtraneousProps(
+function getExtraneousInputErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   // Verify that the input doesn't have extra properties violating the target
   if (target.additionalProperties === false) {
     const superProps = new Set(Object.keys(target.properties));
     for (const prop of Object.keys(input.properties ?? {})) {
       if (!superProps.has(prop)) {
-        // tslint:disable-next-line:no-unused-expression
-        log(paths, 'input has extraneous property', prop);
-        return false;
+        return [
+          {
+            paths,
+            args: ['input has extraneous property', prop],
+          },
+        ];
       }
     }
   }
-
-  // log(paths, 'passes extraneous properties check');
-  return true;
 }
 
-function inputPropertiesMatch(
+function getInputPropertyErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   const subProps = (input.properties ?? {}) as {
     [k: string]: JSONSchema7;
   };
@@ -161,20 +207,17 @@ function inputPropertiesMatch(
       continue;
     }
 
-    if (
-      !satisfies(subProps[prop], superProps[prop], options, {
-        input: paths.input.concat([prop]),
-        target: paths.target.concat([prop]),
-      })
-    ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'Property', prop, 'does not match');
-      return false;
+    const errors = getErrors(subProps[prop], superProps[prop], options, {
+      input: paths.input.concat([prop]),
+      target: paths.target.concat([prop]),
+    });
+    if (errors?.length) {
+      return [
+        ...errors,
+        { paths, args: ['Property', prop, 'does not match'] },
+      ] as ErrorArray;
     }
   }
-
-  // log(paths, 'passes properties checks');
-  return true;
 }
 
 function calculateEffectiveMinLength(schema: JSONSchema7): number {
@@ -234,20 +277,20 @@ function gatherEnumValues(schema: JSONSchema7): any[] | undefined {
   }
 }
 
-function stringRulesMatch(
+function getStringErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   if (target.type !== 'string') {
-    return true; // nop
+    return;
   }
 
   if (target.format && target.format !== input.format) {
-    let compatible;
+    let compatible: boolean;
     if (input.enum) {
-      compatible = all(
+      compatible = allBool(
         input.enum,
         (s: string) => options.ajv.validate(target, s) as boolean
       );
@@ -277,155 +320,154 @@ function stringRulesMatch(
       }
     }
     if (!compatible) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'String format mismatch');
-      return false;
+      return [{ paths, args: ['String format mismatch'] }];
     }
   }
 
   if (target.pattern && target.pattern !== input.pattern) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, 'String pattern mismatch');
-    return false;
+    return [{ paths, args: ['String pattern mismatch'] }];
   }
 
   if (
     hasProperty(target, 'minLength') &&
     calculateEffectiveMinLength(input) < target.minLength
   ) {
-    log(paths, 'input minLength is less than target');
-    return false;
+    return [
+      {
+        paths,
+        args: ['input minLength is less than target'],
+      },
+    ];
   }
   if (
     hasProperty(target, 'maxLength') &&
     calculateEffectiveMaxLength(input) > target.maxLength
   ) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, 'input maxLength is less than target');
-    return false;
+    return [
+      {
+        paths,
+        args: ['input maxLength is less than target'],
+      },
+    ];
   }
 
   const maybeTargetEnums = new Set(gatherEnumValues(target));
   if (maybeTargetEnums.size) {
     const inputEnums = gatherEnumValues(input);
     if (inputEnums === undefined) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input is missing enum restrictions');
-      return false;
+      return [
+        {
+          paths,
+          args: ['input is missing enum restrictions'],
+        },
+      ];
     }
     for (const e of inputEnums) {
       if (!maybeTargetEnums.has(e)) {
-        // tslint:disable-next-line:no-unused-expression
-        log(
-          paths,
-          'target',
-          Array.from(maybeTargetEnums),
-          'is missing possible input enum:',
-          e
-        );
-        return false;
+        return [
+          {
+            paths,
+            args: [
+              'target',
+              Array.from(maybeTargetEnums),
+              'is missing possible input enum:',
+              e,
+            ],
+          },
+        ];
       }
     }
   }
-
-  // log(paths, 'passes string checks');
-  return true;
 }
 
-function arrayRulesMatch(
+function getArrayErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   if (target.type !== 'array') {
-    return true; // nop
+    return; // nop
   }
 
   if (
     hasProperty(target, 'minItems') &&
     (!hasProperty(input, 'minItems') || input.minItems < target.minItems)
   ) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, 'input minItems is less than target');
-    return false;
+    return [{ paths, args: ['input minItems is less than target'] }];
   }
   if (
     hasProperty(target, 'maxItems') &&
     (!hasProperty(input, 'maxItems') || input.maxItems > target.maxItems)
   ) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, 'input maxItems is more than target');
-    return false;
+    return [{ paths, args: ['input maxItems is more than target'] }];
   }
 
   if (Array.isArray(target.items)) {
     if (!hasProperty(input, 'items')) {
-      log(paths, 'input is missing items');
-      return false;
+      return [{ paths, args: ['input is missing items'] }];
     }
 
     if (
       !Array.isArray(input.items) ||
       target.items.length !== input.items.length
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'Tuple item count mismatch');
-      return false;
+      return [{ paths, args: ['Tuple item count mismatch'] }];
     }
     for (let i = 0, len = target.items.length; i < len; i++) {
-      if (
-        !satisfies(
-          input.items[i] as JSONSchema7,
-          target.items[i] as JSONSchema7,
-          options,
+      const errors = getErrors(
+        input.items[i] as JSONSchema7,
+        target.items[i] as JSONSchema7,
+        options,
+        {
+          input: paths.input.concat([i]),
+          target: paths.target.concat([i]),
+        }
+      );
+      if (errors?.length) {
+        return [
+          ...errors,
           {
-            input: paths.input.concat([i]),
-            target: paths.target.concat([i]),
-          }
-        )
-      ) {
-        // tslint:disable-next-line:no-unused-expression
-        log(paths, 'Tuple items mismatch (see previous error)');
-        return false;
+            paths,
+            args: ['Tuple items mismatch:'],
+          },
+        ] as ErrorArray;
       }
     }
   } else {
-    if (
-      !satisfies(
-        input.items as JSONSchema7,
-        target.items as JSONSchema7,
-        options,
+    const errors = getErrors(
+      input.items as JSONSchema7,
+      target.items as JSONSchema7,
+      options,
+      {
+        input: paths.input.concat(['items']),
+        target: paths.target.concat(['items']),
+      }
+    );
+    if (errors?.length) {
+      return [
+        ...errors,
         {
-          input: paths.input.concat(['items']),
-          target: paths.target.concat(['items']),
-        }
-      )
-    ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'Array items mismatch (see previous error)');
-      return false;
+          paths,
+          args: ['Array items mismatch:'],
+        },
+      ] as ErrorArray;
     }
   }
 
   if (target.uniqueItems && !input.uniqueItems) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, 'input does not require uniqueItems');
-    return false;
+    return [{ paths, args: ['input does not require uniqueItems'] }];
   }
-
-  // log(paths, 'passes array check');
-  return true;
 }
 
-function numRulesMatch(
+function getNumericErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   if (target.type !== 'integer' && target.type !== 'number') {
-    return true; // nop
+    return;
   }
 
   if (hasProperty(target, 'maximum')) {
@@ -433,26 +475,25 @@ function numRulesMatch(
       !hasProperty(input, 'maximum') &&
       !hasProperty(input, 'exclusiveMaximum')
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input has no maximum property');
-      return false;
+      return [{ paths, args: ['input has no maximum property'] }];
     }
 
     if (
       hasProperty(input, 'maximum') &&
       (input.maximum as number) > (target.maximum as number)
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input permits greater maximum');
-      return false;
+      return [{ paths, args: ['input permits greater maximum'] }];
     }
     if (
       hasProperty(input, 'exclusiveMaximum') &&
       (input.exclusiveMaximum as number) > (target.maximum as number)
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input permits greater maximum (exclusive)');
-      return false;
+      return [
+        {
+          paths,
+          args: ['input permits greater maximum (exclusive)'],
+        },
+      ];
     }
   }
 
@@ -461,26 +502,25 @@ function numRulesMatch(
       !hasProperty(input, 'maximum') &&
       !hasProperty(input, 'exclusiveMaximum')
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input has no maximum property');
-      return false;
+      return [{ paths, args: ['input has no maximum property'] }];
     }
 
     if (
       hasProperty(input, 'maximum') &&
       input.maximum >= target.exclusiveMaximum
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input permits greater maximum');
-      return false;
+      return [{ paths, args: ['input permits greater maximum'] }];
     }
     if (
       hasProperty(input, 'exclusiveMaximum') &&
       (input.exclusiveMaximum as number) > (target.exclusiveMaximum as number)
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input permits greater exclusiveMaximum');
-      return false;
+      return [
+        {
+          paths,
+          args: ['input permits greater exclusiveMaximum'],
+        },
+      ];
     }
   }
 
@@ -489,23 +529,17 @@ function numRulesMatch(
       !hasProperty(input, 'minimum') &&
       !hasProperty(input, 'exclusiveMinimum')
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input has no minimum property');
-      return false;
+      return [{ paths, args: ['input has no minimum property'] }];
     }
 
     if (hasProperty(input, 'minimum') && input.minimum < target.minimum) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input permits greater minimum');
-      return false;
+      return [{ paths, args: ['input permits greater minimum'] }];
     }
     if (
       hasProperty(input, 'exclusiveMinimum') &&
       input.exclusiveMinimum < target.minimum
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input permits greater minimum');
-      return false;
+      return [{ paths, args: ['input permits greater minimum'] }];
     }
   }
 
@@ -514,222 +548,232 @@ function numRulesMatch(
       !hasProperty(input, 'minimum') &&
       !hasProperty(input, 'exclusiveMinimum')
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input has no minimum property');
-      return false;
+      return [{ paths, args: ['input has no minimum property'] }];
     }
 
     if (
       hasProperty(input, 'minimum') &&
       (input.minimum as number) <= (target.exclusiveMinimum as number)
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input permits smaller minimum');
-      return false;
+      return [{ paths, args: ['input permits smaller minimum'] }];
     }
     if (
       hasProperty(input, 'exclusiveMinimum') &&
       (input.exclusiveMinimum as number) < (target.exclusiveMinimum as number)
     ) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input permits greater exclusiveMinimum');
-      return false;
+      return [
+        {
+          paths,
+          args: ['input permits greater exclusiveMinimum'],
+        },
+      ];
     }
   }
 
   if (target.multipleOf) {
     if (!input.multipleOf) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'input lacks multipleOf');
-      return false;
+      return [{ paths, args: ['input lacks multipleOf'] }];
     }
     if (input.multipleOf % target.multipleOf !== 0) {
-      // tslint:disable-next-line:no-unused-expression
-
-      log(
-        paths,
-        'input multipleOf is not an integer multiple of target multipleOf'
-      );
-      return false;
+      return [
+        {
+          paths,
+          args: [
+            'input multipleOf is not an integer multiple of target multipleOf',
+          ],
+        },
+      ];
     }
   }
-
-  // log(paths, 'passes number checks');
-  return true;
 }
 
-function constMatch(
+function getConstErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   if (target.const && target.const !== input.const) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, `input const mismatch (${target.const} !== ${input.const})`);
-    return false;
+    return [
+      {
+        paths,
+        args: [`input const mismatch (${target.const} !== ${input.const})`],
+      },
+    ];
   }
-
-  // log(paths, 'passes const check');
-  return true;
 }
 
-function allOfMatches(
+function getAllOfErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
+
   paths: Paths
-): boolean {
-  if (
-    input.allOf &&
-    !all(input.allOf as JSONSchema7[], (e, idx) =>
-      satisfies(e, target, options, {
+): ErrorArray | undefined {
+  if (input.allOf) {
+    const errors = all(input.allOf as JSONSchema7[], (e, idx) =>
+      getErrors(e, target, options, {
         input: paths.input.concat(['allOf', idx]),
         target: paths.target,
       })
-    )
-  ) {
-    return false;
+    );
+    if (errors?.length) {
+      return [
+        ...errors,
+        {
+          paths,
+          args: ['Some input.allOf elements do not satisfy target'],
+        },
+      ] as ErrorArray;
+    }
   }
 
-  if (
-    target.allOf &&
-    !all(target.allOf as JSONSchema7[], (e, idx) =>
-      satisfies(input, e, options, {
+  if (target.allOf) {
+    const errors = all(target.allOf as JSONSchema7[], (e, idx) =>
+      getErrors(input, e, options, {
         input: paths.input,
         target: paths.target.concat(['allOf', idx]),
       })
-    )
-  ) {
-    return false;
+    );
+    if (errors?.length) {
+      return [
+        ...errors,
+        {
+          paths,
+          args: ['Some target.allOf elements cannot be satisfied'],
+        },
+      ] as ErrorArray;
+    }
   }
-
-  // log(paths, 'passes allOf check');
-  return true;
 }
 
-function anyOfMatches(
+function getAnyOfErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   // If input can be anyOf [a,b,...], then each of them must be accepted
   // by the target.
-  if (
-    input.anyOf &&
-    !all(input.anyOf as JSONSchema7[], (e, idx) =>
-      satisfies(e, target, options, {
+  if (input.anyOf) {
+    const errors = all(input.anyOf as JSONSchema7[], (branch, idx) =>
+      getErrors(branch, target, options, {
         input: paths.input.concat(['anyOf', idx]),
         target: paths.target,
       })
-    )
-  ) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, 'Some input.anyOf elements do not satisfy target');
-    return false;
+    );
+    if (errors?.length) {
+      return [
+        ...errors,
+        {
+          paths,
+          args: ['Some input.anyOf elements do not satisfy target'],
+        },
+      ] as ErrorArray;
+    }
   }
 
   // If the target can accept anyOf [a,b,...], then it's enough
   // that at least one is satisfied by the input
-  if (
-    target.anyOf &&
-    !some(target.anyOf as JSONSchema7[], (e, idx) =>
-      satisfies(input, e, options, {
+  if (target.anyOf) {
+    const errors = some(target.anyOf as JSONSchema7[], (branch, idx) =>
+      getErrors(input, branch, options, {
         input: paths.input,
         target: paths.target.concat(['anyOf', idx]),
       })
-    )
-  ) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, 'input does not satisfy any of target.anyOf');
-    return false;
+    );
+    if (errors?.length) {
+      return [
+        ...errors,
+        {
+          paths,
+          args: ['input does not satisfy any of target.anyOf'],
+        },
+      ] as ErrorArray;
+    }
   }
-
-  // log(paths, 'passes anyOf check');
-  return true;
 }
 
-function oneOfMatches(
+function getOneOfErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
+): ErrorArray | undefined {
   if (input.oneOf) {
     const cond = (e, idx) =>
-      satisfies(e, target, options, {
+      getErrors(e, target, options, {
         input: paths.input.concat(['oneOf', idx]),
         target: paths.target,
       });
-    const matching =
-      process.env.NODE_ENV === 'production'
-        ? all(input.oneOf as JSONSchema7[], cond)
-        : (input.oneOf as JSONSchema7[]).filter(cond).length;
-    if (!matching) {
-      // tslint:disable-next-line:no-unused-expression
-      log(
-        paths,
-        matching === false ||
-          (matching as number) < (input.oneOf as JSONSchema7[]).length
-          ? 'Some input.oneOf elements do not satisfy target'
-          : 'No input.oneOf elements satisfy target'
-      );
-      return false;
+    const errors = all(input.oneOf as JSONSchema7[], cond);
+    if (errors?.length) {
+      return [
+        ...errors,
+        {
+          paths,
+          args: ['Some input.oneOf elements do not satisfy target'],
+        },
+      ] as ErrorArray;
     }
   }
 
-  if (
-    target.oneOf &&
-    !one(target.oneOf as JSONSchema7[], (e, idx) =>
-      satisfies(input, e, options, {
+  if (target.oneOf) {
+    const errors = one(
+      {
         input: paths.input,
-        target: paths.target.concat(['oneOf', idx]),
-      })
-    )
-  ) {
-    // tslint:disable-next-line:no-unused-expression
-
-    log(paths, 'input does not satisfy exactly one of target.oneOf');
-    return false;
+        target: [...paths.target, 'oneOf'],
+      },
+      target.oneOf as JSONSchema7[],
+      (e, idx) =>
+        getErrors(input, e, options, {
+          input: paths.input,
+          target: paths.target.concat(['oneOf', idx]),
+        })
+    );
+    if (errors?.length) {
+      return errors as ErrorArray;
+    }
   }
-
-  // log(paths, 'passes oneOf check');
-  return true;
 }
 
-function notMatches(
+function getNotErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
-  if (
-    input.not &&
-    satisfies(input.not as JSONSchema7, target, options, {
+): ErrorArray | undefined {
+  const allErrors = [];
+
+  if (input.not) {
+    const errors = getErrors(input.not as JSONSchema7, target, options, {
       input: paths.input.concat(['not']),
       target: paths.target,
-    })
-  ) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, 'input.not should not satisfy target');
-    return false;
+    });
+    if (!errors?.length) {
+      return [
+        {
+          paths,
+          args: ['input.not should not satisfy target'],
+        },
+      ] as ErrorArray;
+    }
   }
 
-  if (
-    target.not &&
-    satisfies(input, target.not as JSONSchema7, options, {
+  if (target.not) {
+    const errors = getErrors(input, target.not as JSONSchema7, options, {
       input: paths.input,
       target: paths.target.concat(['not']),
-    })
-  ) {
-    // tslint:disable-next-line:no-unused-expression
-    log(paths, 'input should not satisfy target.not');
-    return false;
+    });
+    if (!errors?.length) {
+      return [
+        {
+          paths,
+          args: ['input should not satisfy target.not'],
+        },
+      ] as ErrorArray;
+    }
   }
-
-  // log(paths, 'passes "not" check');
-  return true;
 }
 
 type Validator = (
@@ -737,56 +781,41 @@ type Validator = (
   target: JSONSchema7,
   options: Options,
   paths: Paths
-) => boolean;
+) => ErrorArray | undefined;
 
-function satisfies(
+function getErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
-): boolean {
-  if (isEqual(input, target)) {
-    return true;
-  } else if (isEqual(target, {})) {
-    return true;
-  }
-
-  if (target.anyOf || input.anyOf) {
-    return anyOfMatches(input, target, options, paths);
-  } else if (target.allOf || input.allOf) {
-    return allOfMatches(input, target, options, paths);
-  } else if (target.oneOf || input.oneOf) {
-    return oneOfMatches(input, target, options, paths);
+): ErrorArray | undefined {
+  if (isEqual(target, {}) || isEqual(input, target)) {
+    return;
   }
 
   const validators: Validator[] = [
-    arrayRulesMatch,
-    constMatch,
-    numRulesMatch,
-    stringRulesMatch,
-    inputHasNoExtraneousProps,
-    inputHasRequiredProps,
-    inputPropertiesMatch,
-    typeMatches,
-
-    anyOfMatches,
-    oneOfMatches,
-    notMatches,
+    getArrayErrors,
+    getConstErrors,
+    getNumericErrors,
+    getStringErrors,
+    getExtraneousInputErrors,
+    getRequiredInputErrors,
+    getInputPropertyErrors,
+    getTypeMatchErrors,
+    getAnyOfErrors,
+    getOneOfErrors,
+    getNotErrors,
   ];
   if (!options.allowAdditionalProps) {
-    validators.push(inputHasNoExtraneousProps);
+    validators.push(getExtraneousInputErrors);
   }
 
   for (const validator of validators) {
-    if (!validator(input, target, options, paths)) {
-      // tslint:disable-next-line:no-unused-expression
-      log(paths, 'Validator failed:', validator.name);
-      return false;
+    const errors = validator(input, target, options, paths);
+    if (errors?.length) {
+      return errors as ErrorArray;
     }
   }
-
-  // log(paths, 'passes all checks');
-  return true;
 }
 
 interface Options {
@@ -796,10 +825,12 @@ interface Options {
 }
 
 export type { JSONSchema7 };
+
 export default async function inputSatisfies(
   input: JSONSchema7,
   target: JSONSchema7,
-  options: boolean | Partial<Options> = false
+  options: boolean | Partial<Options> = false,
+  errorsOut?: SchemaCompatError[]
 ): Promise<boolean> {
   const processedOpts: Options =
     typeof options === 'boolean'
@@ -834,12 +865,25 @@ export default async function inputSatisfies(
         : { ...target, $schema: defaultSchema }) as RefParserSchemaType
     ),
   ])) as [JSONSchema7, JSONSchema7];
-  return satisfies(
+
+  const errors = getErrors(
     clean(mergeAllOf(sub)),
     clean(mergeAllOf(sup)),
     processedOpts,
-    { input: ['input'], target: ['target'] }
+    { input: ['<input>'], target: ['<target>'] }
   );
+
+  if (errors?.length) {
+    for (const { paths, args } of errors.reverse()) {
+      log(paths, ...args);
+    }
+    if (errorsOut) {
+      errorsOut.push(...errors);
+    }
+    return false;
+  } else {
+    return true;
+  }
 }
 
 function clean(schema: JSONSchema7) {

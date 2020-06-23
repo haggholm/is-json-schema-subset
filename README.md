@@ -45,8 +45,14 @@ If `allowPartial` is `false`, `subset` must provide _all_ required properties fo
 
 ## Install
 
-```
+```bash
 $ yarn add is-json-schema-subset
+```
+
+## Debugging
+
+```bash
+DEBUG=is-json-schema-subset ...
 ```
 
 ## License
