@@ -15,15 +15,15 @@ export { JSONSchema7, jsf, ajv, RANDOM_SAMPLES, satisfies };
 
 expect.extend({
   toSatisfy: async (subset: JSONSchema7, superset: JSONSchema7) => {
-    const [subInconsistent, supInconsistent, pass] = await Promise.all([
+    const [subIsConsistent, supIsConsistent, pass] = await Promise.all([
       satisfies(subset, subset),
       satisfies(superset, superset),
       satisfies(subset, superset),
     ]);
-    if (!subInconsistent) {
+    if (!subIsConsistent) {
       throw new Error('Subset does not match itself!');
     }
-    if (!supInconsistent) {
+    if (!supIsConsistent) {
       throw new Error('Superset does not match itself!');
     }
 
@@ -46,9 +46,13 @@ expect.extend({
             pass,
             message: () =>
               `!!!ERROR!!! Subset ${JSON.stringify(
-                subset
+                subset,
+                null,
+                2
               )} was found to satisfy ${JSON.stringify(
-                superset
+                superset,
+                null,
+                2
               )}, but failed on random data: ${JSON.stringify(instance)}`,
           };
         }
@@ -58,30 +62,34 @@ expect.extend({
     return {
       pass,
       message: () =>
-        `Expected ${JSON.stringify(subset)} to satisfy ${JSON.stringify(
-          superset
-        )}`,
+        `Expected ${JSON.stringify(
+          subset,
+          null,
+          2
+        )} to satisfy ${JSON.stringify(superset, null, 2)}`,
     };
   },
   toViolate: async (subset: JSONSchema7, superset: JSONSchema7) => {
-    const [subInconsistent, supInconsistent, pass] = await Promise.all([
+    const [subIsConsistent, supIsConsistent, pass] = await Promise.all([
       satisfies(subset, subset),
       satisfies(superset, superset),
       satisfies(subset, superset),
     ]);
-    if (!subInconsistent) {
+    if (!subIsConsistent) {
       throw new Error('Subset does not match itself!');
     }
-    if (!supInconsistent) {
+    if (!supIsConsistent) {
       throw new Error('Superset does not match itself!');
     }
 
     return {
       pass: !pass,
       message: () =>
-        `Expected ${JSON.stringify(subset)} not to satisfy ${JSON.stringify(
-          superset
-        )}`,
+        `Expected ${JSON.stringify(
+          subset,
+          null,
+          2
+        )} not to satisfy ${JSON.stringify(superset, null, 2)}`,
     };
   },
 });

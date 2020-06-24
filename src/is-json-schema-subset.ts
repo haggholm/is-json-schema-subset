@@ -793,6 +793,14 @@ function getErrors(
     return;
   }
 
+  if (target.anyOf || input.anyOf) {
+    return getAnyOfErrors(input, target, options, paths);
+  } else if (target.allOf || input.allOf) {
+    return getAllOfErrors(input, target, options, paths);
+  } else if (target.oneOf || input.oneOf) {
+    return getOneOfErrors(input, target, options, paths);
+  }
+
   const validators: Validator[] = [
     getArrayErrors,
     getConstErrors,

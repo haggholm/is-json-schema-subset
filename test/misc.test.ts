@@ -292,54 +292,111 @@ describe('required properties', () => {
     }));
 });
 
-test('Empirical problem cases', () =>
-  expect({
-    properties: {
-      emails: {
-        items: {
-          properties: {
-            type: {
-              enum: ['other', 'personal', 'work'],
-              type: 'string',
+describe('Empirical problem cases', () => {
+  it('should resolve emails', async () => {
+    await expect({
+      properties: {
+        emails: {
+          items: {
+            properties: {
+              type: {
+                enum: ['other', 'personal', 'work'],
+                type: 'string',
+              },
+              value: {
+                format: 'email',
+                minLength: 6,
+                type: 'string',
+              },
             },
-            value: {
-              format: 'email',
-              minLength: 6,
-              type: 'string',
-            },
+            required: ['type', 'value'],
+            title: 'Email',
+            type: 'object',
           },
-          required: ['type', 'value'],
-          title: 'Email',
-          type: 'object',
+          type: 'array',
         },
-        type: 'array',
       },
-    },
-    required: ['emails'],
-    type: 'object',
-    // @ts-ignore
-  }).toSatisfy({
-    type: 'object',
-    required: ['emails'],
-    properties: {
-      emails: {
-        items: {
-          properties: {
-            type: {
-              enum: ['other', 'personal', 'work'],
-              type: 'string',
+      required: ['emails'],
+      type: 'object',
+      // @ts-ignore
+    }).toSatisfy({
+      type: 'object',
+      required: ['emails'],
+      properties: {
+        emails: {
+          items: {
+            properties: {
+              type: {
+                enum: ['other', 'personal', 'work'],
+                type: 'string',
+              },
+              value: {
+                format: 'email',
+                minLength: 6,
+                type: 'string',
+              },
             },
-            value: {
-              format: 'email',
-              minLength: 6,
-              type: 'string',
-            },
+            required: ['type', 'value'],
+            title: 'Email',
+            type: 'object',
           },
-          required: ['type', 'value'],
-          title: 'Email',
-          type: 'object',
+          type: 'array',
         },
-        type: 'array',
       },
-    },
-  }));
+    });
+  });
+
+  it('should resolve anyOf', async () => {
+    await expect({
+      type: 'object',
+      required: ['foo'],
+      properties: { foo: { type: 'string' }, baz: { type: 'boolean' } },
+      // @ts-ignore
+    }).toSatisfy({
+      type: 'object',
+      required: ['foo'],
+      properties: {
+        foo: { type: 'string' },
+      },
+    });
+
+    await expect({
+      anyOf: [
+        {
+          type: 'object',
+          required: ['foo'],
+          properties: { foo: { type: 'string' }, baz: { type: 'boolean' } },
+        },
+      ],
+      // @ts-ignore
+    }).toSatisfy({
+      type: 'object',
+      required: ['foo'],
+      properties: {
+        foo: { type: 'string' },
+      },
+    });
+
+    await expect({
+      anyOf: [
+        {
+          type: 'object',
+          required: ['foo'],
+          properties: { foo: { type: 'string' }, baz: { type: 'boolean' } },
+        },
+        {
+          type: 'object',
+          required: ['foo'],
+          properties: { foo: { type: 'string' }, bar: { type: 'number' } },
+        },
+      ],
+      // @ts-ignore
+    }).toSatisfy({
+      type: 'object',
+      required: ['foo'],
+      properties: {
+        foo: { type: 'string' },
+      },
+    });
+  });
+});
