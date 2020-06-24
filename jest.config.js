@@ -6,16 +6,18 @@ module.exports = {
   collectCoverageFrom: [
     '**/*.{ts,tsx}',
     '!test/common.ts',
+    '!src/log-util.ts',
+    '!src/types.ts',
     '!node_modules/**',
     '!dist/**',
     '!coverage/**',
   ],
   coverageThreshold: {
     global: {
-      statements: 63,
-      branches: 55,
-      functions: 68,
-      lines: 64,
+      statements: 66,
+      branches: 59,
+      functions: 64,
+      lines: 66,
     },
   },
 };

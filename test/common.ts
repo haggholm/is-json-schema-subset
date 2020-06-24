@@ -1,12 +1,10 @@
-/* tslint:disable:no-console */
-
 import AJV = require('ajv');
 import jsf = require('json-schema-faker');
 import { JSONSchema7 } from 'json-schema';
 
 import satisfies from '../src/is-json-schema-subset';
 
-const RANDOM_SAMPLES = 100;
+const RANDOM_SAMPLES = 25;
 
 const ajv = new AJV({ allErrors: true });
 jsf.option('optionalsProbability', 0.5);
@@ -21,9 +19,17 @@ expect.extend({
       satisfies(subset, superset),
     ]);
     if (!subIsConsistent) {
+      console.error(
+        'Subset does not match itself!',
+        require('util').inspect(subset)
+      );
       throw new Error('Subset does not match itself!');
     }
     if (!supIsConsistent) {
+      console.error(
+        'Superset does not match itself!',
+        require('util').inspect(superset)
+      );
       throw new Error('Superset does not match itself!');
     }
 
@@ -33,7 +39,8 @@ expect.extend({
           ? superset
           : { ...superset, $schema: 'http://json-schema.org/draft-07/schema#' }
       );
-      for (let i = 0; i < RANDOM_SAMPLES; i++) {
+      const t0 = Date.now();
+      for (let i = 0; i < RANDOM_SAMPLES && Date.now() - t0 < 1000; i++) {
         let instance;
         try {
           instance = jsf.generate(subset, []);

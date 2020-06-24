@@ -1,12 +1,10 @@
-/* tslint:disable:no-console */
-
 import './common';
 
 test(`string format compatibility`, async () => {
   await expect({
     type: 'string',
     format: 'uri',
-    // @ts-ignore
+    // @ts-ignore TS2339
   }).toSatisfy({
     type: 'string',
     format: 'uri-reference',
@@ -14,7 +12,7 @@ test(`string format compatibility`, async () => {
   await expect({
     type: 'string',
     format: 'uri-reference',
-    // @ts-ignore
+    // @ts-ignore TS2339
   }).toViolate({
     type: 'string',
     format: 'uri',
@@ -25,7 +23,7 @@ test(`string format/enum compatibility`, async () => {
   await expect({
     type: 'string',
     enum: ['https://www.google.com', 'https://owl.co'],
-    // @ts-ignore
+    // @ts-ignore TS2339
   }).toSatisfy({
     type: 'string',
     format: 'uri',
@@ -33,7 +31,7 @@ test(`string format/enum compatibility`, async () => {
   await expect({
     type: 'string',
     enum: ['vainglory'],
-    // @ts-ignore
+    // @ts-ignore TS2339
   }).toViolate({
     type: 'string',
     format: 'uri',

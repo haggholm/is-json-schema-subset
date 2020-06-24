@@ -1,50 +1,27 @@
+import AJV = require('ajv');
 import isEqual = require('fast-deep-equal');
+import { Pointer } from 'rfc6902/pointer';
 import mergeAllOf = require('json-schema-merge-allof');
-import RefParser = require('@apidevtools/json-schema-ref-parser');
+import $RefParser = require('@apidevtools/json-schema-ref-parser');
+
 import type { JSONSchema as RefParserSchemaType } from '@apidevtools/json-schema-ref-parser';
 import type { JSONSchema7 } from 'json-schema';
-import mkDebug = require('debug');
-import AJV = require('ajv');
 import type { Ajv } from 'ajv';
 
-const debug = mkDebug('is-json-schema-subset');
+import { log } from './log-util';
+import type {
+  ErrorArray,
+  Options,
+  Paths,
+  SchemaCompatError,
+  Validator,
+} from './types';
 
+export type { JSONSchema7 };
+export type { SchemaCompatError } from './types';
+
+const hasOwnProperty = Object.prototype.hasOwnProperty;
 const defaultSchema = 'http://json-schema.org/draft-07/schema#';
-
-interface Paths {
-  input: Readonly<(string | number)[]>;
-  target: Readonly<(string | number)[]>;
-}
-
-const hasProperty: (ob: any, prop: PropertyKey) => ErrorArray | undefined = (
-  ob,
-  prop
-) => Object.prototype.hasOwnProperty.call(ob, prop);
-
-function formatPathCallback(v: string | number) {
-  return typeof v === 'string' && /^[A-Za-z0-9_$]+$/.test(v)
-    ? `.${v}`
-    : `[${JSON.stringify(v)}]`;
-}
-function formatPath(path: Readonly<(string | number)[]>): string {
-  return [path[0], ...path.slice(1).map(formatPathCallback)].join('');
-}
-
-function formatPaths(paths: Paths): string[] {
-  return [formatPath(paths.input), '/', formatPath(paths.target)];
-}
-
-export interface SchemaCompatError {
-  paths: Paths;
-  args: any[];
-}
-
-type ErrorArray = [SchemaCompatError, ...SchemaCompatError[]];
-
-function log(paths, ...args: any[]): void {
-  const indent = Math.max(paths.input.length, paths.target.length);
-  debug(''.padStart(indent, ' '), ...args, 'at', ...formatPaths(paths));
-}
 
 function all<T>(
   elements: T[],
@@ -117,13 +94,25 @@ function one<T>(
   }
 }
 
+function isEmptyObject(ob: JSONSchema7): boolean {
+  if (ob === null || typeof ob !== 'object' || Array.isArray(ob)) {
+    return false;
+  }
+  for (const key in ob) {
+    if (hasOwnProperty.call(ob, key)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function getTypeMatchErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
 ): ErrorArray | undefined {
-  if (isEqual(target, {})) {
+  if (isEmptyObject(target) || !target.type) {
     return;
   }
 
@@ -148,10 +137,10 @@ function getRequiredInputErrors(
   paths: Paths
 ): ErrorArray | undefined {
   // Verify that the target doesn't require anything missing from the input
-  const inputRequires = new Set((input.required ?? []) as string[]);
+  const inputRequires: Set<string> = new Set(input.required);
   for (const prop of (target.required ?? []) as string[]) {
     if (!inputRequires.has(prop)) {
-      const hasDefault = Object.prototype.hasOwnProperty.call(
+      const hasDefault = hasOwnProperty.call(
         target.properties![prop],
         'default'
       );
@@ -203,12 +192,12 @@ function getInputPropertyErrors(
   };
 
   for (const prop of Object.keys(superProps)) {
-    if (!subProps || !hasProperty(subProps, prop)) {
+    if (!subProps || !hasOwnProperty.call(subProps, prop)) {
       continue;
     }
 
     const errors = getErrors(subProps[prop], superProps[prop], options, {
-      input: paths.input.concat([prop]),
+      input: [...paths.input, prop],
       target: paths.target.concat([prop]),
     });
     if (errors?.length) {
@@ -329,7 +318,7 @@ function getStringErrors(
   }
 
   if (
-    hasProperty(target, 'minLength') &&
+    hasOwnProperty.call(target, 'minLength') &&
     calculateEffectiveMinLength(input) < target.minLength
   ) {
     return [
@@ -340,7 +329,7 @@ function getStringErrors(
     ];
   }
   if (
-    hasProperty(target, 'maxLength') &&
+    hasOwnProperty.call(target, 'maxLength') &&
     calculateEffectiveMaxLength(input) > target.maxLength
   ) {
     return [
@@ -391,20 +380,22 @@ function getArrayErrors(
   }
 
   if (
-    hasProperty(target, 'minItems') &&
-    (!hasProperty(input, 'minItems') || input.minItems < target.minItems)
+    hasOwnProperty.call(target, 'minItems') &&
+    (!hasOwnProperty.call(input, 'minItems') ||
+      input.minItems < target.minItems)
   ) {
     return [{ paths, args: ['input minItems is less than target'] }];
   }
   if (
-    hasProperty(target, 'maxItems') &&
-    (!hasProperty(input, 'maxItems') || input.maxItems > target.maxItems)
+    hasOwnProperty.call(target, 'maxItems') &&
+    (!hasOwnProperty.call(input, 'maxItems') ||
+      input.maxItems > target.maxItems)
   ) {
     return [{ paths, args: ['input maxItems is more than target'] }];
   }
 
   if (Array.isArray(target.items)) {
-    if (!hasProperty(input, 'items')) {
+    if (!hasOwnProperty.call(input, 'items')) {
       return [{ paths, args: ['input is missing items'] }];
     }
 
@@ -420,7 +411,7 @@ function getArrayErrors(
         target.items[i] as JSONSchema7,
         options,
         {
-          input: paths.input.concat([i]),
+          input: [...paths.input, i],
           target: paths.target.concat([i]),
         }
       );
@@ -440,7 +431,7 @@ function getArrayErrors(
       target.items as JSONSchema7,
       options,
       {
-        input: paths.input.concat(['items']),
+        input: [...paths.input, 'items'],
         target: paths.target.concat(['items']),
       }
     );
@@ -470,22 +461,22 @@ function getNumericErrors(
     return;
   }
 
-  if (hasProperty(target, 'maximum')) {
+  if (hasOwnProperty.call(target, 'maximum')) {
     if (
-      !hasProperty(input, 'maximum') &&
-      !hasProperty(input, 'exclusiveMaximum')
+      !hasOwnProperty.call(input, 'maximum') &&
+      !hasOwnProperty.call(input, 'exclusiveMaximum')
     ) {
       return [{ paths, args: ['input has no maximum property'] }];
     }
 
     if (
-      hasProperty(input, 'maximum') &&
+      hasOwnProperty.call(input, 'maximum') &&
       (input.maximum as number) > (target.maximum as number)
     ) {
       return [{ paths, args: ['input permits greater maximum'] }];
     }
     if (
-      hasProperty(input, 'exclusiveMaximum') &&
+      hasOwnProperty.call(input, 'exclusiveMaximum') &&
       (input.exclusiveMaximum as number) > (target.maximum as number)
     ) {
       return [
@@ -497,22 +488,22 @@ function getNumericErrors(
     }
   }
 
-  if (hasProperty(target, 'exclusiveMaximum')) {
+  if (hasOwnProperty.call(target, 'exclusiveMaximum')) {
     if (
-      !hasProperty(input, 'maximum') &&
-      !hasProperty(input, 'exclusiveMaximum')
+      !hasOwnProperty.call(input, 'maximum') &&
+      !hasOwnProperty.call(input, 'exclusiveMaximum')
     ) {
       return [{ paths, args: ['input has no maximum property'] }];
     }
 
     if (
-      hasProperty(input, 'maximum') &&
+      hasOwnProperty.call(input, 'maximum') &&
       input.maximum >= target.exclusiveMaximum
     ) {
       return [{ paths, args: ['input permits greater maximum'] }];
     }
     if (
-      hasProperty(input, 'exclusiveMaximum') &&
+      hasOwnProperty.call(input, 'exclusiveMaximum') &&
       (input.exclusiveMaximum as number) > (target.exclusiveMaximum as number)
     ) {
       return [
@@ -524,41 +515,44 @@ function getNumericErrors(
     }
   }
 
-  if (hasProperty(target, 'minimum')) {
+  if (hasOwnProperty.call(target, 'minimum')) {
     if (
-      !hasProperty(input, 'minimum') &&
-      !hasProperty(input, 'exclusiveMinimum')
+      !hasOwnProperty.call(input, 'minimum') &&
+      !hasOwnProperty.call(input, 'exclusiveMinimum')
     ) {
       return [{ paths, args: ['input has no minimum property'] }];
     }
 
-    if (hasProperty(input, 'minimum') && input.minimum < target.minimum) {
+    if (
+      hasOwnProperty.call(input, 'minimum') &&
+      input.minimum < target.minimum
+    ) {
       return [{ paths, args: ['input permits greater minimum'] }];
     }
     if (
-      hasProperty(input, 'exclusiveMinimum') &&
+      hasOwnProperty.call(input, 'exclusiveMinimum') &&
       input.exclusiveMinimum < target.minimum
     ) {
       return [{ paths, args: ['input permits greater minimum'] }];
     }
   }
 
-  if (hasProperty(target, 'exclusiveMinimum')) {
+  if (hasOwnProperty.call(target, 'exclusiveMinimum')) {
     if (
-      !hasProperty(input, 'minimum') &&
-      !hasProperty(input, 'exclusiveMinimum')
+      !hasOwnProperty.call(input, 'minimum') &&
+      !hasOwnProperty.call(input, 'exclusiveMinimum')
     ) {
       return [{ paths, args: ['input has no minimum property'] }];
     }
 
     if (
-      hasProperty(input, 'minimum') &&
+      hasOwnProperty.call(input, 'minimum') &&
       (input.minimum as number) <= (target.exclusiveMinimum as number)
     ) {
       return [{ paths, args: ['input permits smaller minimum'] }];
     }
     if (
-      hasProperty(input, 'exclusiveMinimum') &&
+      hasOwnProperty.call(input, 'exclusiveMinimum') &&
       (input.exclusiveMinimum as number) < (target.exclusiveMinimum as number)
     ) {
       return [
@@ -607,13 +601,12 @@ function getAllOfErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
-
   paths: Paths
 ): ErrorArray | undefined {
   if (input.allOf) {
     const errors = all(input.allOf as JSONSchema7[], (e, idx) =>
       getErrors(e, target, options, {
-        input: paths.input.concat(['allOf', idx]),
+        input: [...paths.input, 'allOf', idx],
         target: paths.target,
       })
     );
@@ -658,7 +651,7 @@ function getAnyOfErrors(
   if (input.anyOf) {
     const errors = all(input.anyOf as JSONSchema7[], (branch, idx) =>
       getErrors(branch, target, options, {
-        input: paths.input.concat(['anyOf', idx]),
+        input: [...paths.input, 'anyOf', idx],
         target: paths.target,
       })
     );
@@ -703,7 +696,7 @@ function getOneOfErrors(
   if (input.oneOf) {
     const cond = (e, idx) =>
       getErrors(e, target, options, {
-        input: paths.input.concat(['oneOf', idx]),
+        input: [...paths.input, 'oneOf', idx],
         target: paths.target,
       });
     const errors = all(input.oneOf as JSONSchema7[], cond);
@@ -747,7 +740,7 @@ function getNotErrors(
 
   if (input.not) {
     const errors = getErrors(input.not as JSONSchema7, target, options, {
-      input: paths.input.concat(['not']),
+      input: [...paths.input, 'not'],
       target: paths.target,
     });
     if (!errors?.length) {
@@ -776,20 +769,13 @@ function getNotErrors(
   }
 }
 
-type Validator = (
-  input: JSONSchema7,
-  target: JSONSchema7,
-  options: Options,
-  paths: Paths
-) => ErrorArray | undefined;
-
 function getErrors(
   input: JSONSchema7,
   target: JSONSchema7,
   options: Options,
   paths: Paths
 ): ErrorArray | undefined {
-  if (isEqual(target, {}) || isEqual(input, target)) {
+  if (isEmptyObject(target) || isEqual(input, target)) {
     return;
   }
 
@@ -799,23 +785,44 @@ function getErrors(
     return getAllOfErrors(input, target, options, paths);
   } else if (target.oneOf || input.oneOf) {
     return getOneOfErrors(input, target, options, paths);
+  } else if (input.not || target.not) {
+    return getNotErrors(input, target, options, paths);
   }
 
-  const validators: Validator[] = [
-    getArrayErrors,
-    getConstErrors,
-    getNumericErrors,
-    getStringErrors,
-    getExtraneousInputErrors,
-    getRequiredInputErrors,
-    getInputPropertyErrors,
-    getTypeMatchErrors,
-    getAnyOfErrors,
-    getOneOfErrors,
-    getNotErrors,
-  ];
-  if (!options.allowAdditionalProps) {
-    validators.push(getExtraneousInputErrors);
+  // Type matching must be done *first*, or we may make wrong assumptions
+  // about available keywords (e.g. array `items` vs. object `properties`)
+  const tme = getTypeMatchErrors(input, target, options, paths);
+  if (tme?.length) {
+    return tme as ErrorArray;
+  }
+
+  let validators;
+  const inputType = input.type;
+  const targetType = target.type;
+  if (inputType === 'string' || targetType === 'string') {
+    validators = [getStringErrors];
+  } else if (inputType === 'object' || targetType === 'object') {
+    // If we're not dealing with objects, we can bypass calling several
+    // validators
+    validators = [getInputPropertyErrors, getRequiredInputErrors];
+    if (!options.allowAdditionalProps) {
+      validators.push(getExtraneousInputErrors);
+    }
+  } else if (inputType === 'array' || targetType === 'array') {
+    validators = [getArrayErrors];
+  } else if (
+    inputType === 'integer' ||
+    targetType === 'integer' ||
+    inputType === 'number' ||
+    targetType === 'number'
+  ) {
+    validators = [getNumericErrors];
+  } else {
+    validators = [];
+  }
+
+  if (target.const) {
+    validators.push(getConstErrors);
   }
 
   for (const validator of validators) {
@@ -826,13 +833,16 @@ function getErrors(
   }
 }
 
-interface Options {
-  allowPartial: boolean;
-  allowAdditionalProps: boolean;
-  ajv: Ajv;
+function isValidTopLevelSchema(schema: JSONSchema7): boolean {
+  return !!(
+    schema.type ||
+    schema.oneOf ||
+    schema.anyOf ||
+    schema.allOf ||
+    schema.const ||
+    isEmptyObject(schema)
+  );
 }
-
-export type { JSONSchema7 };
 
 export default async function inputSatisfies(
   input: JSONSchema7,
@@ -846,12 +856,20 @@ export default async function inputSatisfies(
           allowPartial: options,
           allowAdditionalProps: false,
           ajv: new AJV(),
+          refParserOptions: {},
         }
       : {
           allowPartial: options.allowPartial || false,
           allowAdditionalProps: options.allowAdditionalProps || false,
           ajv: options.ajv ?? new AJV(),
+          refParserOptions: options.refParserOptions ?? {},
         };
+
+  if (!isValidTopLevelSchema(input)) {
+    throw new Error('Input schema does not appear to be a top-level schema');
+  } else if (!isValidTopLevelSchema(target)) {
+    throw new Error('Target schema does not appear to be a top-level schema');
+  }
 
   const draftRegex = /draft-0[1234]\/schema/;
   if (
@@ -861,25 +879,25 @@ export default async function inputSatisfies(
     throw new Error('Requires JSON schema draft version 5+');
   }
 
-  const [sub, sup] = (await Promise.all([
-    RefParser.dereference(
+  const [sub, sup] = await Promise.all([
+    $RefParser.dereference(
       (input.$schema
         ? input
-        : { ...input, $schema: defaultSchema }) as RefParserSchemaType
-    ),
-    RefParser.dereference(
+        : { ...input, $schema: defaultSchema }) as RefParserSchemaType,
+      processedOpts.refParserOptions
+    ) as Promise<JSONSchema7>,
+    $RefParser.dereference(
       (target.$schema
         ? target
-        : { ...target, $schema: defaultSchema }) as RefParserSchemaType
-    ),
-  ])) as [JSONSchema7, JSONSchema7];
+        : { ...target, $schema: defaultSchema }) as RefParserSchemaType,
+      processedOpts.refParserOptions
+    ) as Promise<JSONSchema7>,
+  ]);
 
-  const errors = getErrors(
-    clean(mergeAllOf(sub)),
-    clean(mergeAllOf(sup)),
-    processedOpts,
-    { input: ['<input>'], target: ['<target>'] }
-  );
+  const errors = getErrors(mergeAllOf(sub), mergeAllOf(sup), processedOpts, {
+    input: [],
+    target: [],
+  });
 
   if (errors?.length) {
     for (const { paths, args } of errors.reverse()) {
@@ -892,22 +910,4 @@ export default async function inputSatisfies(
   } else {
     return true;
   }
-}
-
-function clean(schema: JSONSchema7) {
-  if (typeof schema !== 'object' || schema === null) {
-    return schema;
-  }
-
-  const res = {};
-  let changed = false;
-  for (const key of Object.keys(schema)) {
-    if (key.startsWith('$')) {
-      changed = true;
-    } else {
-      res[key] = schema[key];
-    }
-  }
-
-  return changed ? res : schema;
 }
