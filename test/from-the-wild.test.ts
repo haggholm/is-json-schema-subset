@@ -186,4 +186,55 @@ describe('Empirical problem cases', () => {
       },
     });
   });
+
+  it('should resolve SSN', () =>
+    expect({
+      maximum: 899999999,
+      minimum: 1010001,
+      type: 'integer',
+      title: 'SSN',
+      // @ts-ignore TS2339
+    }).toSatisfy({
+      maximum: 899999999,
+      minimum: 1010001,
+      type: 'number',
+    }));
+
+  it('should manage zero-length arrays', () =>
+    expect({
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      allOf: [
+        {
+          type: 'object',
+          required: ['searchString'],
+          properties: { searchString: { type: 'string' } },
+        },
+        {
+          type: 'object',
+          required: ['resultCategory', 'searchKeywords'],
+          properties: {
+            resultCategory: { type: 'string', enum: ['ggg'] },
+            searchKeywords: {
+              type: 'array',
+              minItems: 0,
+              maxItems: 0,
+              items: [],
+            },
+          },
+          additionalProperties: false,
+        },
+      ],
+      // @ts-ignore
+    }).toSatisfy({
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      type: 'object',
+      required: ['searchString'],
+      properties: {
+        passthrough: {},
+        resultCategory: { type: 'string' },
+        searchKeywords: { items: { type: 'string' }, type: 'array' },
+        searchSites: { items: { type: 'string' }, type: 'array' },
+        searchString: { type: 'string' },
+      },
+    }));
 });

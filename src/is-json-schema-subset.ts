@@ -379,19 +379,44 @@ function getArrayErrors(
     return; // nop
   }
 
-  if (
-    hasOwnProperty.call(target, 'minItems') &&
-    (!hasOwnProperty.call(input, 'minItems') ||
-      input.minItems < target.minItems)
-  ) {
-    return [{ paths, args: ['input minItems is less than target'] }];
+  const inputMinItems = hasOwnProperty.call(input, 'minItems')
+    ? input.minItems
+    : Array.isArray(input.items)
+    ? input.items.length
+    : null;
+  const targetMinItems = hasOwnProperty.call(target, 'minItems')
+    ? target.minItems
+    : Array.isArray(target.items)
+    ? target.items.length
+    : null;
+  const inputMaxItems = hasOwnProperty.call(input, 'maxItems')
+    ? input.maxItems
+    : Array.isArray(input.items)
+    ? input.items.length
+    : null;
+  const targetMaxItems = hasOwnProperty.call(target, 'maxItems')
+    ? target.maxItems
+    : Array.isArray(target.items)
+    ? target.items.length
+    : null;
+
+  if (targetMinItems !== null) {
+    if (inputMinItems === null) {
+      return [{ paths, args: ['input does not guarantee minItems'] }];
+    } else if (inputMinItems < targetMinItems) {
+      return [{ paths, args: ['input minItems is less than target'] }];
+    } else if (targetMaxItems !== null && inputMinItems > targetMaxItems) {
+      return [{ paths, args: ['input minItems is more than target maxItems'] }];
+    }
   }
-  if (
-    hasOwnProperty.call(target, 'maxItems') &&
-    (!hasOwnProperty.call(input, 'maxItems') ||
-      input.maxItems > target.maxItems)
-  ) {
-    return [{ paths, args: ['input maxItems is more than target'] }];
+  if (targetMaxItems !== null) {
+    if (inputMaxItems === null) {
+      return [{ paths, args: ['input does not guaranteee maxItems'] }];
+    } else if (inputMaxItems > targetMaxItems) {
+      return [{ paths, args: ['input maxItems is more than target'] }];
+    } else if (inputMinItems !== null && inputMinItems > targetMaxItems) {
+      return [{ paths, args: ['input minItems is more than target minItems'] }];
+    }
   }
 
   if (Array.isArray(target.items)) {
@@ -425,10 +450,14 @@ function getArrayErrors(
         ] as ErrorArray;
       }
     }
+  } else if (inputMaxItems === 0) {
+    // A zero-tuple [] satisfies any target (if it doesn't violate length
+    // constraints, already covered above).
+    return;
   } else {
     const errors = getErrors(
-      input.items as JSONSchema7,
-      target.items as JSONSchema7,
+      (input.items ?? {}) as JSONSchema7,
+      (target.items ?? {}) as JSONSchema7,
       options,
       {
         input: [...paths.input, 'items'],
