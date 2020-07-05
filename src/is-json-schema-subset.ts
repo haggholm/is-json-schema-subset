@@ -771,14 +771,26 @@ function getErrors(
 }
 
 function isValidTopLevelSchema(schema: JSONSchema7): boolean {
-  return !!(
+  if (
     schema.type ||
     schema.oneOf ||
     schema.anyOf ||
     schema.allOf ||
-    schema.const ||
+    hasOwnProperty.call(schema, 'const') ||
     isEmptyObject(schema)
-  );
+  ) {
+    return true;
+  }
+
+  for (const key in schema) {
+    if (hasOwnProperty.call(key)) {
+      if (key !== 'description' && key !== 'title' && !key.startsWith('$')) {
+        return false;
+      }
+    }
+  }
+
+  return true;
 }
 
 export default async function inputSatisfies(
