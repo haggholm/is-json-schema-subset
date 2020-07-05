@@ -8,7 +8,8 @@ import type { JSONSchema as RefParserSchemaType } from '@apidevtools/json-schema
 import type { JSONSchema7 } from 'json-schema';
 import type { Ajv } from 'ajv';
 
-import { log } from './log-util';
+import { isEmptyObject, allBool, all, one, some, subFormats } from './util';
+import { log, isLogEnabled } from './log-util';
 import type {
   ErrorArray,
   Options,
@@ -23,89 +24,6 @@ export type { SchemaCompatError } from './types';
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 const defaultSchema = 'http://json-schema.org/draft-07/schema#';
 
-function all<T>(
-  elements: T[],
-  condition: (val: T, idx: number) => ErrorArray | undefined
-): ErrorArray | undefined {
-  // Reverse for legible error message ordering
-  for (let i = elements.length - 1; i >= 0; i--) {
-    const errors = condition(elements[i], i);
-    if (errors?.length) {
-      return errors as ErrorArray;
-    }
-  }
-  return undefined;
-}
-
-function allBool<T>(
-  elements: T[],
-  condition: (val: T, idx: number) => boolean
-): boolean {
-  for (let i = 0, len = elements.length; i < len; i++) {
-    if (!condition(elements[i], i)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function some<T>(
-  elements: T[],
-  condition: (val: T, idx: number) => ErrorArray | undefined
-): ErrorArray | undefined {
-  const allErrors = [];
-  // Reverse for legible error message ordering
-  for (let i = elements.length - 1; i >= 0; i--) {
-    const errors = condition(elements[i], i);
-    if (errors?.length) {
-      allErrors.push(...errors);
-    } else {
-      return;
-    }
-  }
-  return allErrors.length ? (allErrors as ErrorArray) : undefined;
-}
-
-function one<T>(
-  paths,
-  elements: T[],
-  condition: (val: T, idx: number) => ErrorArray | undefined
-): ErrorArray | undefined {
-  const allErrors = [];
-  let matches = 0;
-  // Reverse for legible error message ordering
-  for (let i = elements.length - 1; i >= 0; i--) {
-    const errors = condition(elements[i], i);
-    if (errors?.length) {
-      matches++;
-      allErrors.push(...errors);
-    }
-  }
-
-  if (matches === 1) {
-    return;
-  } else if (matches > 1) {
-    return [{ paths, args: ['oneOf matches more than one branch'] }];
-  } else {
-    return [
-      ...allErrors,
-      { paths, args: ['oneOf does not match any branches'] },
-    ] as ErrorArray;
-  }
-}
-
-function isEmptyObject(ob: JSONSchema7): boolean {
-  if (ob === null || typeof ob !== 'object' || Array.isArray(ob)) {
-    return false;
-  }
-  for (const key in ob) {
-    if (hasOwnProperty.call(ob, key)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 function getTypeMatchErrors(
   input: JSONSchema7,
   target: JSONSchema7,
@@ -116,6 +34,7 @@ function getTypeMatchErrors(
     return;
   }
 
+  // TODO: Handle multi-valued type arrays
   const match =
     input.type === target.type ||
     (target.type === 'number' && input.type === 'integer');
@@ -191,20 +110,25 @@ function getInputPropertyErrors(
     [k: string]: JSONSchema7;
   };
 
-  for (const prop of Object.keys(superProps)) {
-    if (!subProps || !hasOwnProperty.call(subProps, prop)) {
-      continue;
-    }
+  if (subProps) {
+    for (const prop in superProps) {
+      if (
+        !hasOwnProperty.call(superProps, prop) ||
+        !hasOwnProperty.call(subProps, prop)
+      ) {
+        continue;
+      }
 
-    const errors = getErrors(subProps[prop], superProps[prop], options, {
-      input: [...paths.input, prop],
-      target: paths.target.concat([prop]),
-    });
-    if (errors?.length) {
-      return [
-        ...errors,
-        { paths, args: ['Property', prop, 'does not match'] },
-      ] as ErrorArray;
+      const errors = getErrors(subProps[prop], superProps[prop], options, {
+        input: [...paths.input, prop],
+        target: paths.target.concat([prop]),
+      });
+      if (errors?.length) {
+        return [
+          ...errors,
+          { paths, args: ['Property', prop, 'does not match'] },
+        ] as ErrorArray;
+      }
     }
   }
 }
@@ -284,29 +208,9 @@ function getStringErrors(
         (s: string) => options.ajv.validate(target, s) as boolean
       );
     } else {
-      switch (target.format) {
-        case 'idn-email':
-          compatible = input.format === 'email';
-          break;
-        case 'idn-hostname':
-          compatible = input.format === 'hostname';
-          break;
-        case 'iri':
-          compatible = input.format === 'uri' || input.format === 'iri';
-          break;
-        case 'iri-reference':
-          compatible =
-            input.format === 'uri' ||
-            input.format === 'uri-reference' ||
-            input.format === 'iri';
-          break;
-        case 'uri-reference':
-          compatible = input.format === 'uri';
-          break;
-        default:
-          compatible = false;
-          break;
-      }
+      compatible =
+        subFormats[target.format] &&
+        subFormats[target.format].indexOf(input.format) !== -1;
     }
     if (!compatible) {
       return [{ paths, args: ['String format mismatch'] }];
@@ -804,7 +708,11 @@ function getErrors(
   options: Options,
   paths: Paths
 ): ErrorArray | undefined {
-  if (isEmptyObject(target) || isEqual(input, target)) {
+  if (
+    isEmptyObject(target) ||
+    ('$id' in input && input.$id === target.$id) ||
+    isEqual(input, target)
+  ) {
     return;
   }
 
@@ -929,11 +837,17 @@ export default async function inputSatisfies(
   });
 
   if (errors?.length) {
-    for (const { paths, args } of errors.reverse()) {
-      log(paths, ...args);
+    if (isLogEnabled()) {
+      for (const { paths, args } of errors.reverse()) {
+        log(paths, ...args);
+      }
     }
     if (errorsOut) {
-      errorsOut.push(...errors);
+      const len = errors.length;
+      errorsOut.length = len;
+      for (let i = 0; i < len; i++) {
+        errorsOut[+i] = errors[+i];
+      }
     }
     return false;
   } else {

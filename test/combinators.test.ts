@@ -1,4 +1,6 @@
 import './common';
+import inputSatisfies from '../src/is-json-schema-subset';
+import { JSONSchema7 } from 'json-schema';
 
 describe('Schema combinators', () => {
   it('should accept oneOf', () =>
@@ -28,15 +30,15 @@ describe('Schema combinators', () => {
       ],
     }));
 
-  it('should reject oneOf: no match', () =>
-    expect({
+  it('should reject oneOf: no match', () => {
+    const input = {
       title: 'child',
       type: 'object',
       properties: {
         foo: { type: 'number' },
       },
-      // @ts-ignore TS2339
-    }).toViolate({
+    } as JSONSchema7;
+    const target = {
       title: 'parent',
       type: 'object',
       oneOf: [
@@ -53,7 +55,13 @@ describe('Schema combinators', () => {
           },
         },
       ],
-    }));
+    } as JSONSchema7;
+    const errors = [];
+    // @ts-ignore TS2339
+    expect(input).toViolate(target);
+    inputSatisfies(input, target, {}, errors);
+    expect(errors).toMatchSnapshot();
+  });
 
   it('should reject oneOf with multiple matches', () =>
     expect({

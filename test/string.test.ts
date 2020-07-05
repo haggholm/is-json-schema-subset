@@ -1,21 +1,47 @@
 import './common';
+import { subFormats, allFormats } from '../src/util';
 
-test(`string format compatibility`, async () => {
-  await expect({
-    type: 'string',
-    format: 'uri',
-    // @ts-ignore TS2339
-  }).toSatisfy({
-    type: 'string',
-    format: 'uri-reference',
+describe(`string format compatibility`, () => {
+  it('should accept any format as compatible with itself', async () => {
+    for (const format of allFormats) {
+      await expect({
+        type: 'string',
+        format,
+        // @ts-ignore TS2339
+      }).toSatisfy({
+        type: 'string',
+        format,
+      });
+    }
   });
-  await expect({
-    type: 'string',
-    format: 'uri-reference',
-    // @ts-ignore TS2339
-  }).toViolate({
-    type: 'string',
-    format: 'uri',
+
+  for (const format of Object.keys(subFormats)) {
+    for (const subFormat of subFormats[format]) {
+      it(`should accept ${subFormat} as satisfying ${format}`, () =>
+        // @ts-ignore TS2339
+        expect({ type: 'string', format: subFormat }).toSatisfy({
+          type: 'string',
+          format,
+        }));
+    }
+  }
+
+  it('should reject other unequal formats', async () => {
+    for (const target of allFormats) {
+      for (const input of allFormats) {
+        if (
+          target === input ||
+          (subFormats[target] && subFormats[target].indexOf(input) !== -1)
+        ) {
+          continue;
+        }
+        // @ts-ignore TS2339
+        await expect({ type: 'string', format: input }).toViolate({
+          type: 'string',
+          format: target,
+        });
+      }
+    }
   });
 });
 
