@@ -1,0 +1,3 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Schema combinators should reject oneOf: no match 1`] = `Array []`;

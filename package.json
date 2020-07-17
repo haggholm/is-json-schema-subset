@@ -34,11 +34,11 @@
     "preversion": "run-p -l lint test"
   },
   "dependencies": {
-    "@apidevtools/json-schema-ref-parser": "^9.0.1",
+    "@apidevtools/json-schema-ref-parser": "^9.0.3",
     "@types/debug": "^4.1.5",
     "@types/json-schema-merge-allof": "^0.6.0",
     "@types/node": "^12.6.8",
-    "ajv": "^6.12.2",
+    "ajv": "^6.12.3",
     "debug": "^4.1.1",
     "fast-deep-equal": "^3.1.3",
     "json-schema": "^0.2.5",
@@ -46,9 +46,9 @@
     "rfc6902": "^3.0.4"
   },
   "devDependencies": {
-    "@types/jest": "^26.0.3",
+    "@types/jest": "^26.0.4",
     "@types/rimraf": "^3.0.0",
-    "ajv": "^6.12.2",
+    "ajv": "^6.12.3",
     "coveralls": "^3.1.0",
     "jest": "^26.1.0",
     "json-schema-faker": "^0.5.0-rcv.24",
@@ -57,12 +57,12 @@
     "rimraf": "^3.0.2",
     "sort-package-json": "^1.44.0",
     "terser": "^4.8.0",
-    "ts-jest": "^26.1.1",
+    "ts-jest": "^26.1.3",
     "tslint": "^6.1.2",
     "tslint-config-prettier": "^1.18.0",
     "tslint-consistent-codestyle": "^1.16.0",
     "tslint-plugin-prettier": "^2.3.0",
-    "typescript": "^3.9.5"
+    "typescript": "^3.9.7"
   },
   "engines": {
     "node": ">=10.0"
