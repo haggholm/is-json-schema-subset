@@ -17,8 +17,8 @@
     "dist"
   ],
   "sideEffects": false,
-  "main": "dist/is-json-schema-subset.js",
-  "types": "dist",
+  "main": "dist/is-json-schema-subset.min.js",
+  "types": "dist/is-json-schema-subset.d.ts",
   "scripts": {
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "compile": "tsc",
