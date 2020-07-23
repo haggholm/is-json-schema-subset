@@ -1,6 +1,6 @@
+import type { JSONSchema7 } from 'json-schema';
 import './common';
 import inputSatisfies from '../src/is-json-schema-subset';
-import { JSONSchema7 } from 'json-schema';
 
 describe('Schema combinators', () => {
   it('should accept oneOf', () =>

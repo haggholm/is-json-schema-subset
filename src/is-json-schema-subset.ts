@@ -1,23 +1,22 @@
 import AJV = require('ajv');
 import isEqual = require('fast-deep-equal');
-import { Pointer } from 'rfc6902/pointer';
 import mergeAllOf = require('json-schema-merge-allof');
 import $RefParser = require('@apidevtools/json-schema-ref-parser');
 import rfdc = require('rfdc');
-
 import type { JSONSchema as RefParserSchemaType } from '@apidevtools/json-schema-ref-parser';
 import type { JSONSchema7 } from 'json-schema';
-import type { Ajv } from 'ajv';
 
-import { isEmptyObject, allBool, all, one, some, subFormats } from './util';
-import { log, isLogEnabled } from './log-util';
-import type {
-  ErrorArray,
-  Options,
-  Paths,
-  SchemaCompatError,
-  Validator,
-} from './types';
+import {
+  all,
+  allBool,
+  cloneRefs,
+  isEmptyObject,
+  one,
+  some,
+  subFormats,
+} from './util';
+import { isLogEnabled, log } from './log-util';
+import type { ErrorArray, Options, Paths, SchemaCompatError } from './types';
 
 export type { JSONSchema7 };
 export type { SchemaCompatError } from './types';
@@ -838,7 +837,8 @@ export default async function inputSatisfies(
 
   const [sub, sup] = await Promise.all([
     $RefParser.dereference(
-      deepClone(
+      // TODO: Use selective clone if/when https://github.com/APIDevTools/json-schema-ref-parser/pull/190 is merged
+      /*cloneRefs*/ deepClone(
         (input.$schema
           ? input
           : { ...input, $schema: defaultSchema }) as RefParserSchemaType
@@ -846,7 +846,8 @@ export default async function inputSatisfies(
       processedOpts.refParserOptions
     ) as Promise<JSONSchema7>,
     $RefParser.dereference(
-      deepClone(
+      // TODO: Use selective clone if/when https://github.com/APIDevTools/json-schema-ref-parser/pull/190 is merged
+      /*cloneRefs*/ deepClone(
         (target.$schema
           ? target
           : { ...target, $schema: defaultSchema }) as RefParserSchemaType

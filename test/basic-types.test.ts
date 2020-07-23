@@ -1,3 +1,4 @@
+import type { JSONSchema7 } from 'json-schema';
 import './common';
 
 for (const type of [

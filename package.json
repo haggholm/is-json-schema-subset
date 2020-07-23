@@ -51,6 +51,7 @@
     "@types/rimraf": "^3.0.0",
     "ajv": "^6.12.3",
     "coveralls": "^3.1.0",
+    "deep-freeze": "^0.0.1",
     "jest": "^26.1.0",
     "json-schema-faker": "^0.5.0-rcv.24",
     "npm-run-all": "^4.1.5",

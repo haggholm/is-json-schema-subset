@@ -1,7 +1,7 @@
-import { Pointer } from 'rfc6902/pointer';
-import { JSONSchema7 } from 'json-schema';
+import type { JSONSchema as $RefParserJSONSchema } from '@apidevtools/json-schema-ref-parser';
+import type { JSONSchema7 } from 'json-schema';
 
-import { ErrorArray, Paths } from './types';
+import type { ErrorArray } from './types';
 
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 
@@ -121,3 +121,44 @@ export const subFormats = {
   // 'idn-hostname': ['hostname'], TODO: Not currently supported by AJV
   // 'idn-email': ['email'], TODO: Not currently supported by AJV
 };
+
+/** @internal */
+export function cloneRefs<T extends JSONSchema7 | $RefParserJSONSchema>(
+  ob: T
+): T {
+  if (!ob || typeof ob !== 'object') {
+    return ob;
+  } else if (Array.isArray(ob)) {
+    const len = ob.length;
+    const copy: any = new Array(len);
+    let changed = false;
+    for (let i = 0; i < len; i++) {
+      const el = ob[+i];
+      copy[+i] = el && typeof el === 'object' ? cloneRefs(el) : el;
+      changed = changed || copy[+i] !== el;
+    }
+    return changed ? copy : ob;
+  }
+
+  if ('type' in ob && ob.type === 'object') {
+    const newProps = cloneRefs(ob.properties);
+    return '$ref' in ob || newProps === ob.properties
+      ? ob
+      : ({ ...ob, properties: newProps } as T);
+  } else {
+    const copy = {} as T;
+    let changed = '$ref' in ob;
+    for (const key in ob) {
+      if (hasOwnProperty.call(ob, key)) {
+        const oldProp = ob[key];
+        if (oldProp && typeof oldProp === 'object') {
+          const newProp = (copy[key] = cloneRefs(ob[key]));
+          changed = changed || oldProp !== newProp;
+        } else {
+          copy[key] = oldProp;
+        }
+      }
+    }
+    return changed ? (copy as T) : ob;
+  }
+}

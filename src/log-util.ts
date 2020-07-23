@@ -1,7 +1,7 @@
 import mkDebug = require('debug');
 import { enabled } from 'debug';
 import { Pointer } from 'rfc6902/pointer';
-import { Paths } from './types';
+import type { Paths } from './types';
 
 const namespace = 'is-json-schema-subset';
 const debug = mkDebug(namespace);

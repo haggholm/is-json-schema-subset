@@ -1,5 +1,6 @@
 import AJV = require('ajv');
 import jsf = require('json-schema-faker');
+import deepFreeze = require('deep-freeze');
 import { JSONSchema7 } from 'json-schema';
 
 import satisfies from '../src/is-json-schema-subset';
@@ -13,6 +14,10 @@ export { JSONSchema7, jsf, ajv, RANDOM_SAMPLES, satisfies };
 
 expect.extend({
   toSatisfy: async (subset: JSONSchema7, superset: JSONSchema7) => {
+    // Ensure we do not accidentally modify input during dereferencing
+    deepFreeze(subset);
+    deepFreeze(superset);
+
     const [subIsConsistent, supIsConsistent, pass] = await Promise.all([
       satisfies(subset, subset),
       satisfies(superset, superset),
@@ -77,6 +82,10 @@ expect.extend({
     };
   },
   toViolate: async (subset: JSONSchema7, superset: JSONSchema7) => {
+    // Ensure we do not accidentally modify input during dereferencing
+    deepFreeze(subset);
+    deepFreeze(superset);
+
     const [subIsConsistent, supIsConsistent, pass] = await Promise.all([
       satisfies(subset, subset),
       satisfies(superset, superset),

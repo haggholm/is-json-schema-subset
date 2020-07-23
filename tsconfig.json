@@ -12,7 +12,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "target": "es2018",
-    "composite": true
+    "composite": true,
+    "importsNotUsedAsValues": "error"
   },
   "exclude": ["dist/**", "test/**"]
 }

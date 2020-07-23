@@ -1,6 +1,6 @@
-import { Ajv } from 'ajv';
-import { JSONSchema7 } from 'json-schema';
-import $RefParser = require('@apidevtools/json-schema-ref-parser');
+import type { Ajv } from 'ajv';
+import type { JSONSchema7 } from 'json-schema';
+import type { Options as $RefParserOptions } from '@apidevtools/json-schema-ref-parser';
 
 export interface Paths {
   input: (string | number)[];
@@ -18,7 +18,7 @@ export interface Options {
   allowPartial: boolean;
   allowAdditionalProps: boolean;
   ajv: Ajv;
-  refParserOptions: $RefParser.Options;
+  refParserOptions: $RefParserOptions;
 }
 
 export type Validator = (
