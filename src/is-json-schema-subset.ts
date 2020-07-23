@@ -3,6 +3,7 @@ import isEqual = require('fast-deep-equal');
 import { Pointer } from 'rfc6902/pointer';
 import mergeAllOf = require('json-schema-merge-allof');
 import $RefParser = require('@apidevtools/json-schema-ref-parser');
+import rfdc = require('rfdc');
 
 import type { JSONSchema as RefParserSchemaType } from '@apidevtools/json-schema-ref-parser';
 import type { JSONSchema7 } from 'json-schema';
@@ -21,6 +22,7 @@ import type {
 export type { JSONSchema7 };
 export type { SchemaCompatError } from './types';
 
+const deepClone = rfdc();
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 const defaultSchema = 'http://json-schema.org/draft-07/schema#';
 
@@ -716,6 +718,12 @@ function getErrors(
     return;
   }
 
+  if ('const' in input) {
+    if (!options.ajv.validate(target, input)) {
+      return [{ paths, args: ['const input does not match target schema'] }];
+    }
+  }
+
   if (target.anyOf || input.anyOf) {
     return getAnyOfErrors(input, target, options, paths);
   } else if (target.allOf || input.allOf) {
@@ -830,15 +838,19 @@ export default async function inputSatisfies(
 
   const [sub, sup] = await Promise.all([
     $RefParser.dereference(
-      (input.$schema
-        ? input
-        : { ...input, $schema: defaultSchema }) as RefParserSchemaType,
+      deepClone(
+        (input.$schema
+          ? input
+          : { ...input, $schema: defaultSchema }) as RefParserSchemaType
+      ),
       processedOpts.refParserOptions
     ) as Promise<JSONSchema7>,
     $RefParser.dereference(
-      (target.$schema
-        ? target
-        : { ...target, $schema: defaultSchema }) as RefParserSchemaType,
+      deepClone(
+        (target.$schema
+          ? target
+          : { ...target, $schema: defaultSchema }) as RefParserSchemaType
+      ),
       processedOpts.refParserOptions
     ) as Promise<JSONSchema7>,
   ]);
