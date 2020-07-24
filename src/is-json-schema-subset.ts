@@ -798,6 +798,17 @@ function isValidTopLevelSchema(schema: JSONSchema7): boolean {
   return true;
 }
 
+/**
+ * @param input
+ * @param target
+ * @param options
+ * @param [options.allowPartial=false]
+ * @param [options.allowAdditionalProps=false]
+ * @param [options.ajv]
+ * @param [options.refParserOptions={}]
+ * @param [options.dereference=true]
+ * @param errorsOut
+ */
 export default async function inputSatisfies(
   input: JSONSchema7,
   target: JSONSchema7,
@@ -811,12 +822,14 @@ export default async function inputSatisfies(
           allowAdditionalProps: false,
           ajv: new AJV(),
           refParserOptions: {},
+          dereference: true,
         }
       : {
           allowPartial: options.allowPartial || false,
           allowAdditionalProps: options.allowAdditionalProps || false,
           ajv: options.ajv ?? new AJV(),
           refParserOptions: options.refParserOptions ?? {},
+          dereference: options.dereference ?? true,
         };
 
   if (!isValidTopLevelSchema(input)) {
@@ -833,24 +846,26 @@ export default async function inputSatisfies(
     throw new Error('Requires JSON schema draft version 5+');
   }
 
-  const [sub, sup] = await Promise.all([
-    $RefParser.dereference(
-      cloneRefs(
-        (input.$schema
-          ? input
-          : { ...input, $schema: defaultSchema }) as RefParserSchemaType
-      ),
-      processedOpts.refParserOptions
-    ) as Promise<JSONSchema7>,
-    $RefParser.dereference(
-      cloneRefs(
-        (target.$schema
-          ? target
-          : { ...target, $schema: defaultSchema }) as RefParserSchemaType
-      ),
-      processedOpts.refParserOptions
-    ) as Promise<JSONSchema7>,
-  ]);
+  const [sub, sup] = processedOpts.dereference
+    ? await Promise.all([
+        $RefParser.dereference(
+          cloneRefs(
+            (input.$schema
+              ? input
+              : { ...input, $schema: defaultSchema }) as RefParserSchemaType
+          ),
+          processedOpts.refParserOptions
+        ) as Promise<JSONSchema7>,
+        $RefParser.dereference(
+          cloneRefs(
+            (target.$schema
+              ? target
+              : { ...target, $schema: defaultSchema }) as RefParserSchemaType
+          ),
+          processedOpts.refParserOptions
+        ) as Promise<JSONSchema7>,
+      ])
+    : [input, target];
 
   const errors = getErrors(mergeAllOf(sub), mergeAllOf(sup), processedOpts, {
     input: [],

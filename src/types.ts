@@ -19,6 +19,7 @@ export interface Options {
   allowAdditionalProps: boolean;
   ajv: Ajv;
   refParserOptions: $RefParserOptions;
+  dereference: boolean;
 }
 
 export type Validator = (
