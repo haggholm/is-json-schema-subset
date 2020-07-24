@@ -2,7 +2,6 @@ import AJV = require('ajv');
 import isEqual = require('fast-deep-equal');
 import mergeAllOf = require('json-schema-merge-allof');
 import $RefParser = require('@apidevtools/json-schema-ref-parser');
-import rfdc = require('rfdc');
 import type { JSONSchema as RefParserSchemaType } from '@apidevtools/json-schema-ref-parser';
 import type { JSONSchema7 } from 'json-schema';
 
@@ -21,7 +20,6 @@ import type { ErrorArray, Options, Paths, SchemaCompatError } from './types';
 export type { JSONSchema7 };
 export type { SchemaCompatError } from './types';
 
-const deepClone = rfdc();
 const hasOwnProperty = Object.prototype.hasOwnProperty;
 const defaultSchema = 'http://json-schema.org/draft-07/schema#';
 
@@ -837,8 +835,7 @@ export default async function inputSatisfies(
 
   const [sub, sup] = await Promise.all([
     $RefParser.dereference(
-      // TODO: Use selective clone if/when https://github.com/APIDevTools/json-schema-ref-parser/pull/190 is merged
-      /*cloneRefs*/ deepClone(
+      cloneRefs(
         (input.$schema
           ? input
           : { ...input, $schema: defaultSchema }) as RefParserSchemaType
@@ -846,8 +843,7 @@ export default async function inputSatisfies(
       processedOpts.refParserOptions
     ) as Promise<JSONSchema7>,
     $RefParser.dereference(
-      // TODO: Use selective clone if/when https://github.com/APIDevTools/json-schema-ref-parser/pull/190 is merged
-      /*cloneRefs*/ deepClone(
+      cloneRefs(
         (target.$schema
           ? target
           : { ...target, $schema: defaultSchema }) as RefParserSchemaType

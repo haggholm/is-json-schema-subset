@@ -1,7 +1,7 @@
 import AJV = require('ajv');
 import jsf = require('json-schema-faker');
 import deepFreeze = require('deep-freeze');
-import { JSONSchema7 } from 'json-schema';
+import type { JSONSchema7 } from 'json-schema';
 
 import satisfies from '../src/is-json-schema-subset';
 
