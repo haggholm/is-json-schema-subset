@@ -708,11 +708,20 @@ function getErrors(
   paths: Paths
 ): ErrorArray | undefined {
   if (
+    !target ||
+    input === target ||
     isEmptyObject(target) ||
-    ('$id' in input && input.$id === target.$id) ||
+    (input &&
+      typeof input === 'object' &&
+      '$id' in input &&
+      input.$id === target.$id) ||
     isEqual(input, target)
   ) {
     return;
+  }
+
+  if (!input) {
+    return [{ paths, args: ['input does not provide a value'] }];
   }
 
   if ('const' in input) {
