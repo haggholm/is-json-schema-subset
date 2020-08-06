@@ -855,7 +855,7 @@ export default async function inputSatisfies(
     throw new Error('Requires JSON schema draft version 5+');
   }
 
-  const [sub, sup] = processedOpts.dereference
+  let [sub, sup] = processedOpts.dereference
     ? await Promise.all([
         $RefParser.dereference(
           cloneRefs(
@@ -876,7 +876,9 @@ export default async function inputSatisfies(
       ])
     : [input, target];
 
-  const errors = getErrors(mergeAllOf(sub), mergeAllOf(sup), processedOpts, {
+  sub = purgeEmptyAllOfObjects(mergeAllOf(sub));
+  sup = purgeEmptyAllOfObjects(mergeAllOf(sup));
+  const errors = getErrors(sub, sup, processedOpts, {
     input: [],
     target: [],
   });
@@ -898,4 +900,68 @@ export default async function inputSatisfies(
   } else {
     return true;
   }
+}
+
+/**
+ * mergeAllOf has an annoying tendency to create empty objects that confuse
+ * validation; e.g.
+ * {
+ *   "allOf": [
+ *     {
+ *       "anyOf": [{
+ *         "type": "object"
+ *         "required": ["passthrough"],
+ *         "properties": { ... },
+ *       }]
+ *     },
+ *     { "type": "object", "required": [], "properties": {} }
+ *   ]
+ * }
+ * becomes
+ * {
+ *   "anyOf": [{
+ *     "type": "object"
+ *     "required": ["passthrough"],
+ *     "properties": { ... },
+ *   }],
+ *   "type": "object", "required": [], "properties": {}
+ * }
+ * @param s
+ */
+function purgeEmptyAllOfObjects(s: JSONSchema7): JSONSchema7 {
+  if (!s || typeof s !== 'object') {
+    return s;
+  }
+
+  if (Array.isArray(s)) {
+    return s.map(purgeEmptyAllOfObjects) as JSONSchema7;
+  }
+
+  if (s.type === 'object') {
+    if (
+      s.anyOf &&
+      (!s.required || s.required.length === 0) &&
+      (!s.properties || isEmptyObject(s.properties)) &&
+      allBool(
+        s.anyOf,
+        (sub) => sub && typeof sub === 'object' && sub.type === 'object'
+      )
+    ) {
+      const { type, properties, required, ...rest } = s;
+      s = rest;
+    }
+
+    const props = s.properties;
+    if (props) {
+      for (const k in props) {
+        if (hasOwnProperty.call(props, k)) {
+          s.properties[k] = purgeEmptyAllOfObjects(
+            s.properties[k] as JSONSchema7
+          );
+        }
+      }
+    }
+  }
+
+  return s;
 }
