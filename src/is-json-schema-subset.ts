@@ -357,6 +357,28 @@ function getArrayErrors(
     // A zero-tuple [] satisfies any target (if it doesn't violate length
     // constraints, already covered above).
     return;
+  } else if (Array.isArray(input.items)) {
+    // TODO: What if *both* are arrays?
+    for (const it of input.items) {
+      const errors = getErrors(
+        it as JSONSchema7,
+        (target.items ?? {}) as JSONSchema7,
+        options,
+        {
+          input: [...paths.input, 'items'],
+          target: paths.target.concat(['items']),
+        }
+      );
+      if (errors?.length) {
+        return [
+          ...errors,
+          {
+            paths,
+            args: ['Array items mismatch:'],
+          },
+        ] as ErrorArray;
+      }
+    }
   } else {
     const errors = getErrors(
       (input.items ?? {}) as JSONSchema7,
@@ -955,9 +977,7 @@ function purgeEmptyAllOfObjects(s: JSONSchema7): JSONSchema7 {
     if (props) {
       for (const k in props) {
         if (hasOwnProperty.call(props, k)) {
-          s.properties[k] = purgeEmptyAllOfObjects(
-            s.properties[k] as JSONSchema7
-          );
+          props[k] = purgeEmptyAllOfObjects(props[k] as JSONSchema7);
         }
       }
     }

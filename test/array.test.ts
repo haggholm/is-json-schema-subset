@@ -15,6 +15,19 @@ describe('Arrays', () => {
       items: { type: 'string' },
     }));
 
+  it('should accept more specific arrays', () =>
+    expect({
+      type: 'array',
+      items: [
+        { type: 'string', format: 'uri' },
+        { type: 'string', format: 'email' },
+      ],
+      // @ts-ignore TS2339
+    }).toSatisfy({
+      type: 'array',
+      items: { type: 'string' },
+    }));
+
   it('should reject incompatible items', () =>
     expect({
       type: 'array',
