@@ -62,7 +62,7 @@ function getRequiredInputErrors(
         target.properties![prop],
         'default'
       );
-      if (!hasDefault) {
+      if (!hasDefault && !options.allowPartial) {
         return [
           {
             paths,
