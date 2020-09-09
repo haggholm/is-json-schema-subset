@@ -31,6 +31,8 @@ function getTypeMatchErrors(
 ): ErrorArray | undefined {
   if (isEmptyObject(target) || !target.type) {
     return;
+  } else if ((!input || isEmptyObject(input)) && options.allowPartial) {
+    return;
   }
 
   // TODO: Handle multi-valued type arrays
