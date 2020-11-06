@@ -997,7 +997,7 @@ function purgeEmptyAllOfObjects(s: JSONSchema7): JSONSchema7 {
       s = rest;
     }
 
-    let props = { ...s.properties };
+    const props = { ...s.properties };
     if (props) {
       let changed = false;
       for (const k in props) {
