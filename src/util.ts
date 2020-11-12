@@ -51,6 +51,19 @@ export function some<T>(
 }
 
 /** @internal */
+export function someBool<T>(
+  elements: T[],
+  condition: (val: T, idx: number) => boolean
+): boolean {
+  for (let i = 0, len = elements.length; i < len; i++) {
+    if (condition(elements[i], i)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** @internal */
 export function one<T>(
   paths,
   elements: T[],

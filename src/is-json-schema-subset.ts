@@ -12,6 +12,7 @@ import {
   isEmptyObject,
   one,
   some,
+  someBool,
   subFormats,
 } from './util';
 import { isLogEnabled, log } from './log-util';
@@ -835,11 +836,11 @@ function isValidTopLevelSchema(schema: JSONSchema7): boolean {
  * @param input
  * @param target
  * @param options
- * @param [options.allowPartial=false]
- * @param [options.allowAdditionalProps=false]
- * @param [options.ajv]
- * @param [options.refParserOptions={}]
- * @param [options.dereference=true]
+ * @param options.allowPartial
+ * @param options.allowAdditionalProps
+ * @param options.ajv
+ * @param options.refParserOptions
+ * @param options.dereference
  * @param errorsOut
  */
 export default async function inputSatisfies(
@@ -848,6 +849,24 @@ export default async function inputSatisfies(
   options: boolean | Partial<Options> = false,
   errorsOut?: SchemaCompatError[]
 ): Promise<boolean> {
+  const draftRegex = /draft-0[1234]\/schema/;
+  if (
+    draftRegex.test(input.$schema ?? defaultSchema) ||
+    draftRegex.test(target.$schema ?? defaultSchema)
+  ) {
+    throw new Error('Requires JSON schema draft version 5+');
+  }
+
+  if (isEmptyObject(target)) {
+    return true;
+  }
+
+  if (!isValidTopLevelSchema(input)) {
+    throw new Error('Input schema does not appear to be a top-level schema');
+  } else if (!isValidTopLevelSchema(target)) {
+    throw new Error('Target schema does not appear to be a top-level schema');
+  }
+
   const processedOpts: Options =
     typeof options === 'boolean'
       ? {
@@ -864,20 +883,6 @@ export default async function inputSatisfies(
           refParserOptions: options.refParserOptions ?? {},
           dereference: options.dereference ?? true,
         };
-
-  if (!isValidTopLevelSchema(input)) {
-    throw new Error('Input schema does not appear to be a top-level schema');
-  } else if (!isValidTopLevelSchema(target)) {
-    throw new Error('Target schema does not appear to be a top-level schema');
-  }
-
-  const draftRegex = /draft-0[1234]\/schema/;
-  if (
-    draftRegex.test(input.$schema ?? defaultSchema) ||
-    draftRegex.test(target.$schema ?? defaultSchema)
-  ) {
-    throw new Error('Requires JSON schema draft version 5+');
-  }
 
   let [sub, sup] = processedOpts.dereference
     ? await Promise.all([
@@ -900,8 +905,8 @@ export default async function inputSatisfies(
       ])
     : [input, target];
 
-  sub = purgeEmptyAllOfObjects(mergeAllOf(sub));
-  sup = purgeEmptyAllOfObjects(mergeAllOf(sup));
+  if (hasAllOf(sub)) sub = purgeEmptyAllOfObjects(mergeAllOf(sub));
+  if (hasAllOf(sup)) sup = purgeEmptyAllOfObjects(mergeAllOf(sup));
   const errors = getErrors(sub, sup, processedOpts, {
     input: [],
     target: [],
@@ -926,31 +931,39 @@ export default async function inputSatisfies(
   }
 }
 
+function hasAllOf(schema: JSONSchema7): boolean {
+  if (!schema || typeof schema !== 'object') {
+    return false;
+  } else if ('allOf' in schema) {
+    return true;
+  } else if ('anyOf' in schema && someBool(schema.anyOf ?? [], hasAllOf)) {
+    return true;
+  } else if ('oneOf' in schema && someBool(schema.oneOf ?? [], hasAllOf)) {
+    return true;
+  } else if ('type' in schema && schema.type === 'object') {
+    return someBool(Object.values(schema.properties ?? {}), hasAllOf);
+  } else {
+    return someBool(Object.values(schema ?? {}), hasAllOf);
+  }
+}
+
 /**
- * mergeAllOf has an annoying tendency to create empty objects that confuse
- * validation; e.g.
- * {
- *   "allOf": [
+ * MergeAllOf has an annoying tendency to create empty objects that confuse
+ * validation; e.g. { "allOf": [
  *     {
- *       "anyOf": [{
- *         "type": "object"
- *         "required": ["passthrough"],
- *         "properties": { ... },
- *       }]
- *     },
- *     { "type": "object", "required": [], "properties": {} }
- *   ]
- * }
- * becomes
- * {
- *   "anyOf": [{
+ *     "anyOf": [{
  *     "type": "object"
  *     "required": ["passthrough"],
  *     "properties": { ... },
- *   }],
- *   "type": "object", "required": [], "properties": {}
- * }
+ *     }]
+ *     },
+ *     { "type": "object", "required": [], "properties": {} } ] } becomes { "anyOf": [{
+ *     "type": "object"
+ *     "required": ["passthrough"],
+ *     "properties": { ... }, }], "type": "object", "required": [], "properties": {} }
+ *
  * @param s
+ * @returns Input object or a purged copy
  */
 function purgeEmptyAllOfObjects(s: JSONSchema7): JSONSchema7 {
   if (!s || typeof s !== 'object') {
@@ -958,7 +971,16 @@ function purgeEmptyAllOfObjects(s: JSONSchema7): JSONSchema7 {
   }
 
   if (Array.isArray(s)) {
-    return s.map(purgeEmptyAllOfObjects) as JSONSchema7;
+    const len = s.length;
+    const copy: typeof s = new Array(len);
+    let changed = false;
+    for (let i = 0; i < len; i++) {
+      const oldVal = s[i];
+      const newVal = purgeEmptyAllOfObjects(oldVal);
+      copy[i] = newVal;
+      changed = changed || newVal !== oldVal;
+    }
+    return changed ? copy : (s as JSONSchema7);
   }
 
   if (s.type === 'object') {
@@ -975,13 +997,20 @@ function purgeEmptyAllOfObjects(s: JSONSchema7): JSONSchema7 {
       s = rest;
     }
 
-    const props = s.properties;
+    const props = { ...s.properties };
     if (props) {
+      let changed = false;
       for (const k in props) {
         if (hasOwnProperty.call(props, k)) {
-          props[k] = purgeEmptyAllOfObjects(props[k] as JSONSchema7);
+          const oldVal = props[k];
+          const newVal = purgeEmptyAllOfObjects(oldVal as JSONSchema7);
+          if (newVal !== oldVal) {
+            props[k] = newVal;
+            changed = true;
+          }
         }
       }
+      return changed ? { ...s, properties: props } : s;
     }
   }
 
