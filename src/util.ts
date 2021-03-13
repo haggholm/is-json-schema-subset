@@ -69,7 +69,7 @@ export function one<T>(
   elements: T[],
   condition: (val: T, idx: number) => ErrorArray | undefined
 ): ErrorArray | undefined {
-  const allErrors = [];
+  const allErrors  = [];
   let matches = 0;
   // Reverse for legible error message ordering
   for (let i = elements.length - 1; i >= 0; i--) {
@@ -86,7 +86,7 @@ export function one<T>(
     return [{ paths, args: ['oneOf matches more than one branch'] }];
   } else {
     return [
-      ...allErrors,
+      ...(allErrors as ErrorArray),
       { paths, args: ['oneOf does not match any branches'] },
     ] as ErrorArray;
   }

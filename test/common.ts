@@ -1,9 +1,11 @@
+/* tslint:disable:no-console */
 import AJV = require('ajv');
 import jsf = require('json-schema-faker');
 import deepFreeze = require('deep-freeze');
 import type { JSONSchema7 } from 'json-schema';
 
 import satisfies from '../src/is-json-schema-subset';
+import type { Options } from '../src/types';
 
 const RANDOM_SAMPLES = 25;
 
@@ -13,15 +15,19 @@ jsf.option('optionalsProbability', 0.5);
 export { JSONSchema7, jsf, ajv, RANDOM_SAMPLES, satisfies };
 
 expect.extend({
-  toSatisfy: async (subset: JSONSchema7, superset: JSONSchema7) => {
+  toSatisfy: async (
+    subset: JSONSchema7,
+    superset: JSONSchema7,
+    options: boolean | Partial<Options> = false
+  ) => {
     // Ensure we do not accidentally modify input during dereferencing
     deepFreeze(subset);
     deepFreeze(superset);
 
     const [subIsConsistent, supIsConsistent, pass] = await Promise.all([
-      satisfies(subset, subset),
-      satisfies(superset, superset),
-      satisfies(subset, superset),
+      satisfies(subset, subset, options),
+      satisfies(superset, superset, options),
+      satisfies(subset, superset, options),
     ]);
     if (!subIsConsistent) {
       console.error(
@@ -81,15 +87,19 @@ expect.extend({
         )} to satisfy ${JSON.stringify(superset, null, 2)}`,
     };
   },
-  toViolate: async (subset: JSONSchema7, superset: JSONSchema7) => {
+  toViolate: async (
+    subset: JSONSchema7,
+    superset: JSONSchema7,
+    options: boolean | Partial<Options> = false
+  ) => {
     // Ensure we do not accidentally modify input during dereferencing
     deepFreeze(subset);
     deepFreeze(superset);
 
     const [subIsConsistent, supIsConsistent, pass] = await Promise.all([
-      satisfies(subset, subset),
-      satisfies(superset, superset),
-      satisfies(subset, superset),
+      satisfies(subset, subset, options),
+      satisfies(superset, superset, options),
+      satisfies(subset, superset, options),
     ]);
     if (!subIsConsistent) {
       throw new Error('Subset does not match itself!');

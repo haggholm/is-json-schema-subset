@@ -1,6 +1,6 @@
 import AJV = require('ajv');
 import isEqual = require('fast-deep-equal');
-import mergeAllOf = require('json-schema-merge-allof');
+import mergeAllOf = require('@haggholm/json-schema-merge-allof');
 import $RefParser = require('@apidevtools/json-schema-ref-parser');
 import type { JSONSchema as RefParserSchemaType } from '@apidevtools/json-schema-ref-parser';
 import type { JSONSchema7 } from 'json-schema';
@@ -606,7 +606,12 @@ function getAnyOfErrors(
   // If input can be anyOf [a,b,...], then each of them must be accepted
   // by the target.
   if (input.anyOf) {
-    const errors = all(input.anyOf as JSONSchema7[], (branch, idx) =>
+    // tslint:disable-next-line:prefer-const
+    let { anyOf, ...rest } = input;
+    if (Object.keys(rest).length) {
+      anyOf = anyOf.map((o) => mergeAllOf({ allOf: [o, rest] }));
+    }
+    const errors = all(anyOf as JSONSchema7[], (branch, idx) =>
       getErrors(branch, target, options, {
         input: [...paths.input, 'anyOf', idx],
         target: paths.target,
@@ -626,7 +631,12 @@ function getAnyOfErrors(
   // If the target can accept anyOf [a,b,...], then it's enough
   // that at least one is satisfied by the input
   if (target.anyOf) {
-    const errors = some(target.anyOf as JSONSchema7[], (branch, idx) =>
+    // tslint:disable-next-line:prefer-const
+    let { anyOf, ...rest } = target;
+    if (Object.keys(rest).length) {
+      anyOf = anyOf.map((o) => mergeAllOf({ allOf: [o, rest] }));
+    }
+    const errors = some(anyOf as JSONSchema7[], (branch, idx) =>
       getErrors(input, branch, options, {
         input: paths.input,
         target: paths.target.concat(['anyOf', idx]),
@@ -949,18 +959,31 @@ function hasAllOf(schema: JSONSchema7): boolean {
 
 /**
  * MergeAllOf has an annoying tendency to create empty objects that confuse
- * validation; e.g. { "allOf": [
+ * validation; e.g.
+ *
+ * ```
+ * {
+ *   "allOf": [
  *     {
- *     "anyOf": [{
- *     "type": "object"
- *     "required": ["passthrough"],
- *     "properties": { ... },
- *     }]
+ *       "anyOf": [
+ *         { "type": "object" "required": ["passthrough"], "properties": { ... } }
+ *       ]
  *     },
- *     { "type": "object", "required": [], "properties": {} } ] } becomes { "anyOf": [{
- *     "type": "object"
- *     "required": ["passthrough"],
- *     "properties": { ... }, }], "type": "object", "required": [], "properties": {} }
+ *     { "type": "object", "required": [], "properties": {} }
+ *   ]
+ * }
+ * ```
+ *
+ * Becomes
+ *
+ * ```
+ * {
+ *   "anyOf": [
+ *     { "type": "object" "required": ["passthrough"], "properties": { ... } }
+ *   ],
+ *   "type": "object", "required": [], "properties": {}
+ * }
+ * ```
  *
  * @param s
  * @returns Input object or a purged copy
