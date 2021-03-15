@@ -597,6 +597,36 @@ function getAllOfErrors(
   }
 }
 
+type SchemaWithAnyOf = JSONSchema7 & { anyOf: JSONSchema7[] };
+
+function mergeTopWithAnyOf(ob: SchemaWithAnyOf): SchemaWithAnyOf {
+  const { anyOf, ...rest } = ob;
+  if (!Array.isArray(anyOf) || !Object.keys(rest).length) {
+    return ob;
+  }
+
+  // If we have an object like
+  //   { type: "object", properties: {...}, anyOf: [] }
+  // then it may happen, *and be OK*, that not all anyOf branches can be
+  // merged.
+  //   If *all* branches fail, then it's irreconcileable and will/should fail.
+  let error: Error | undefined;
+  const newAnyOf: JSONSchema7[] = [];
+  for (const o of anyOf) {
+    try {
+      newAnyOf.push(mergeAllOf({ allOf: [o, rest] }));
+    } catch (err) {
+      error = err;
+    }
+  }
+
+  if (error && newAnyOf.length === 0) {
+    throw error;
+  } else {
+    return { anyOf: newAnyOf };
+  }
+}
+
 function getAnyOfErrors(
   input: JSONSchema7,
   target: JSONSchema7,
@@ -606,11 +636,7 @@ function getAnyOfErrors(
   // If input can be anyOf [a,b,...], then each of them must be accepted
   // by the target.
   if (input.anyOf) {
-    // tslint:disable-next-line:prefer-const
-    let { anyOf, ...rest } = input;
-    if (Object.keys(rest).length) {
-      anyOf = anyOf.map((o) => mergeAllOf({ allOf: [o, rest] }));
-    }
+    const { anyOf } = mergeTopWithAnyOf(input as SchemaWithAnyOf);
     const errors = all(anyOf as JSONSchema7[], (branch, idx) =>
       getErrors(branch, target, options, {
         input: [...paths.input, 'anyOf', idx],
@@ -631,11 +657,7 @@ function getAnyOfErrors(
   // If the target can accept anyOf [a,b,...], then it's enough
   // that at least one is satisfied by the input
   if (target.anyOf) {
-    // tslint:disable-next-line:prefer-const
-    let { anyOf, ...rest } = target;
-    if (Object.keys(rest).length) {
-      anyOf = anyOf.map((o) => mergeAllOf({ allOf: [o, rest] }));
-    }
+    const { anyOf } = mergeTopWithAnyOf(target as SchemaWithAnyOf);
     const errors = some(anyOf as JSONSchema7[], (branch, idx) =>
       getErrors(input, branch, options, {
         input: paths.input,

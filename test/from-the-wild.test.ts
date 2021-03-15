@@ -317,4 +317,34 @@ describe('Empirical problem cases', () => {
     // @ts-ignore TS2339
     await expect(input).toSatisfy(target);
   });
+
+  it('should merge enums if at least one matches', async () => {
+    // Tests for a problem with the way merge-allof merges some values
+    await expect({
+      anyOf: [
+        {
+          enum: ['1', '2', '3'],
+          type: 'string',
+        },
+        {
+          enum: ['one', 'two', 'three'],
+          type: 'string',
+        },
+      ],
+      enum: ['one'],
+      type: 'string',
+      // @ts-ignore TS2339
+    }).toSatisfy({
+      anyOf: [
+        {
+          enum: ['1', '2', '3'],
+          type: 'string',
+        },
+        {
+          enum: ['one', 'two', 'three'],
+          type: 'string',
+        },
+      ],
+    });
+  });
 });
