@@ -237,4 +237,84 @@ describe('Empirical problem cases', () => {
         searchString: { type: 'string' },
       },
     }));
+
+  it('should handle partial allOf/anyOf combinations', async () => {
+    const input = {
+      allOf: [
+        {
+          properties: {
+            array: { type: 'array' },
+            filter: {
+              anyOf: [
+                {
+                  properties: { searchString: { type: 'string' } },
+                  required: ['searchString'],
+                  type: 'object',
+                },
+                {
+                  properties: {
+                    searchStrings: { items: { type: 'string' }, type: 'array' },
+                  },
+                  required: ['searchStrings'],
+                  type: 'object',
+                },
+              ],
+            },
+          },
+          required: ['array', 'filter'],
+          type: 'object',
+        },
+        {
+          type: 'object',
+          required: ['filter'],
+          properties: {
+            filter: {
+              type: 'object',
+              required: ['searchStrings'],
+              properties: {
+                searchStrings: {
+                  type: 'array',
+                  minItems: 1,
+                  maxItems: 1,
+                  items: { type: 'string', enum: ['test'] },
+                },
+              },
+            },
+          },
+        },
+      ],
+    };
+    const target = {
+      properties: {
+        array: { type: 'array' },
+        filter: {
+          anyOf: [
+            {
+              properties: { searchString: { type: 'string' } },
+              required: ['searchString'],
+              type: 'object',
+            },
+            {
+              properties: {
+                searchStrings: { items: { type: 'string' }, type: 'array' },
+              },
+              required: ['searchStrings'],
+              type: 'object',
+            },
+          ],
+        },
+      },
+      required: ['array', 'filter'],
+      type: 'object',
+    };
+    // @ts-ignore TS2339
+    await expect(input.allOf[0]).toSatisfy(target);
+    // @ts-ignore TS2339
+    await expect(input.allOf[1]).toSatisfy(target, {
+      allowPartial: true,
+      allowAdditionalProps: true,
+    });
+    // @ts-ignore TS2339
+    await expect(input).toSatisfy(target);
+  });
 });

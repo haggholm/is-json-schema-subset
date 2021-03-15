@@ -5,3 +5,4 @@ coverage/**
 **/*.orig
 tsconfig.tsbuildinfo
 .vscode
+.idea
