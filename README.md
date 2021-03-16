@@ -19,7 +19,7 @@ Uses [ajv](https://github.com/epoberezkin/ajv) and
 import isJsonSchemaSubset from 'is-json-schema-subset';
 
 import inputSchema from './input-schema.json';
-import outputSchema from './input-schema.json';
+import outputSchema from './output-schema.json';
 
 async function check() {
 	if (await isJsonSchemaSubset(inputSchema, outputSchema)) {
