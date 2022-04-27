@@ -3,6 +3,10 @@
   "version": "1.1.27",
   "description": "Check if a JSON schema is a subset of another",
   "keywords": [
+    "JSON",
+    "schema",
+    "jsonschema",
+    "json-schema",
     "JSON schema",
     "validation"
   ],
@@ -18,7 +22,7 @@
   ],
   "sideEffects": false,
   "main": "dist/is-json-schema-subset.js",
-  "types": "dist",
+  "types": "dist/is-json-schema-subset.d.ts",
   "scripts": {
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "compile": "tsc",
