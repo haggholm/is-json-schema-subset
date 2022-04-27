@@ -1,3 +1,7 @@
+.pnp.*
+.yarn/*
+.yarnrc.yml
+
 src/**
 test/**
 tsconfig.tsbuildinfo
