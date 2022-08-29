@@ -85,7 +85,7 @@ function getExtraneousInputErrors(
 ): ErrorArray | undefined {
   // Verify that the input doesn't have extra properties violating the target
   if (target.additionalProperties === false) {
-    const superProps = new Set(Object.keys(target.properties));
+    const superProps = new Set(Object.keys(target.properties ?? {}));
     for (const prop of Object.keys(input.properties ?? {})) {
       if (!superProps.has(prop)) {
         return [
