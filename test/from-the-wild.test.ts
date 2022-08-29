@@ -347,4 +347,25 @@ describe('Empirical problem cases', () => {
       ],
     });
   });
+
+  it('should handle patternProperty only targets', async () => {
+    await expect({
+      type: 'object',
+      properties: {
+        anotherSearchString: {
+          type: 'string'
+        }
+      }
+      // @ts-ignore TS2339
+    }).not.toSatisfy({
+      type: 'object',
+      patternProperties: {
+        searchString: {
+          type: 'string'
+        }
+      },
+      additionalProperties: false
+    });
+  });
+
 });
