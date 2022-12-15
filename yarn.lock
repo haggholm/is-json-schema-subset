@@ -3130,7 +3130,7 @@ __metadata:
     json-schema-faker: ^0.5.0-rcv.33
     npm-run-all: ^4.1.5
     prettier: ^2.2.1
-    rfc6902: ^4.0.2
+    rfc6902: ^5.0.0
     rimraf: ^3.0.2
     sort-package-json: ^1.49.0
     supports-color: ^8.1.1
@@ -5224,10 +5224,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rfc6902@npm:^4.0.2":
-  version: 4.0.2
-  resolution: "rfc6902@npm:4.0.2"
-  checksum: 1d118147a0989447fbb48e97ade1c1823325d594a26b156301405532fcf896a95ed6991eca1139a7a52a1a0d911de4735fa382ce9533f1e1db618ebe01217500
+"rfc6902@npm:^5.0.0":
+  version: 5.0.1
+  resolution: "rfc6902@npm:5.0.1"
+  checksum: 614184e841ad7352406eb9caff1c0eb89cc4d29c4deff74756dcd7d70de4046d3705a4b676769ae2041671d387a9b083806dccc4ded2fcb4174965dab3eeddf7
   languageName: node
   linkType: hard
 
